@@ -1,0 +1,188 @@
+/* ── Variables globales ─────────────────────────────────────────── */
+:root {
+    --primary: #F54927;
+
+    --bg-light: #ffffff00;
+    --input-bg: #f5f7fa00;
+    --text-dark: #1a1a2e;
+    --error: #e53e3e;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────── */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--input-bg);
+}
+
+/* ── Layout login ───────────────────────────────────────────────── */
+.login-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 100dvh;
+    /* cambiado de 100vh a 100dvh */
+    width: 100%;
+}
+
+/* Panel azul de la izquierda */
+.brand-panel {
+    background-color: var(--primary);
+    border-top-right-radius: 50px;
+    /* esquina superior derecha */
+    border-bottom-right-radius: 50px;
+    /* esquina inferior derecha */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    text-align: center;
+}
+
+.brand-panel h1 {
+    font-size: 3rem;
+    font-weight: bold;
+    margin: 0 0 8px 0;
+}
+
+.brand-panel p {
+    opacity: 0.8;
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* Panel del formulario */
+.form-panel {
+    background-color: var(--bg-light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.form-container {
+    width: 100%;
+    max-width: 400px;
+}
+
+.form-container h2 {
+    font-size: 35px;
+    margin-bottom: 8px;
+    color: var(--text-dark);
+}
+
+/* Inputs del login */
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-dark);
+}
+
+.input-group input,
+.input-group select {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: var(--input-bg);
+    box-sizing: border-box;
+    font-size: 0.95rem;
+    transition: border-color 0.2s;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+/* Botón de login */
+.btn-sign-in {
+    width: 100%;
+    padding: 14px;
+    background-color: #f5492791;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-sign-in:hover {
+    background: var(--primary);
+    color: rgb(255, 255, 255);
+}
+
+/* Toggle contraseña */
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+#togglePassword {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #888;
+}
+
+/* Mensaje de error en login */
+.alert-error {
+    background-color: #fff5f5;
+    border: 1px solid #feb2b2;
+    color: var(--error);
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+.navbar a {
+    display: flex;
+    text-decoration: none;
+    align-items: center;
+    /* centra vertical */
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.952);
+    padding: 3px 10px;
+
+    display: center;
+
+}
+
+.nav-brand {
+    color: #643b05 !important;
+    font-size: 20px;
+    font-weight: 700;
+    font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+
+}
+
+.navbar .nav-links a:hover {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.664);
+}
+
+
+/* Responsive */
+@media (max-width: 768px) {
+    .login-wrapper {
+        grid-template-columns: 1fr;
+    }
+
+    .brand-panel {
+        display: none;
+    }
+
+    .form-panel {
+        padding: 20px;
+    }
+}

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= titulo %></title>
+    <link rel="stylesheet" href="/css/styleIndex.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+<main class="login-wrapper">
+
+    <!-- Panel de marca -->
+    <aside class="brand-panel">
+        <header>
+            <h1>Sistema Jalej</h1>
+            <p>Administracion de Ventas</p>
+        </header>
+    </aside>
+
+    <!-- Panel del formulario -->
+    <section class="form-panel">
+        <article class="form-container">
+
+            <header>
+                <h2>Let's <span>Sign In</span> 👇</h2>
+                <p>Ingresa tus datos para acceder al sistema.</p>
+            </header>
+
+            <!-- Mensaje de error -->
+            <% if (error) { %>
+                <div class="alert-error">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <%= error %>
+                </div>
+            <% } %>
+
+            <!-- action y method para enviar al servidor -->
+            <form action="/login" method="POST">
+
+                <section class="input-group">
+                    <label for="usuario">Usuario</label>
+                    <input id="usuario" name="usuario" type="text" placeholder="Ingresa tu usuario" required>
+                </section>
+
+                <section class="input-group">
+                    <label for="contrasena">Contraseña</label>
+                    <div class="password-wrapper">
+                        <input id="contrasena" name="contrasena" type="password" placeholder="Ingresa tu contraseña" required>
+                        <span id="togglePassword" onclick="togglePass()">
+                            <i class="fa-regular fa-eye" id="eyeIcon"></i>
+                        </span>
+                    </div>
+                </section>
+
+                <button type="submit" class="btn-sign-in">
+                    <i class="fa-solid fa-right-to-bracket"></i> Ingresar
+                </button>
+
+            </form>
+
+        </article>
+    </section>
+
+</main>
+
+<script>
+function togglePass() {
+    const input   = document.getElementById('contrasena');
+    const icon    = document.getElementById('eyeIcon');
+    const visible = input.type === 'text';
+    input.type    = visible ? 'password' : 'text';
+    icon.className = visible ? 'fa-regular fa-eye' : 'fa-regular fa-eye-slash';
+}
+</script>
+
+</body>
+</html>

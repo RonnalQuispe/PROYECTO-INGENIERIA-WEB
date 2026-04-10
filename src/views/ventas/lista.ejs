@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdminExpress - Ventas</title>
+    <link rel="stylesheet" href="/css/styleIndex.css">
+    <link rel="stylesheet" href="/css/styleApp.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="app-body">
+
+    <%- include('../partials/navbar') %>
+
+    <main class="app-main">
+        <div class="container">
+
+            <div class="page-header">
+                <h1><i class="fa-solid fa-list"></i> Registro de Ventas</h1>
+                <a href="/ventas/crear" class="btn-primary">
+                     Nueva Venta
+                </a>
+            </div>
+
+            <!-- ── FORMULARIO DE FILTROS ── -->
+            <div class="filter-box">
+                <h3><i class="fa-solid fa-filter"></i> Filtrar por:</h3>
+                <form action="/ventas" method="GET" class="filter-form">
+                    <div class="filter-group">
+                        <label>Zona</label>
+                        <select name="zona">
+                            <option value="">Todas las zonas</option>
+                            <option value="Norte"  <%= filtros.zona === 'Norte'  ? 'selected' : '' %>>Norte</option>
+                            <option value="Centro" <%= filtros.zona === 'Centro' ? 'selected' : '' %>>Centro</option>
+                            <option value="Sur"    <%= filtros.zona === 'Sur'    ? 'selected' : '' %>>Sur</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Cliente</label>
+                        <input type="text" name="cliente" placeholder="Buscar cliente..." value="<%= filtros.cliente %>">
+                    </div>
+                    <button type="submit" class="btn-primary">Buscar</button>
+                    <a href="/ventas" class="btn-secondary">Limpiar</a>
+                </form>
+            </div>
+
+            <!-- ── TABLA DE RESULTADOS ── -->
+            <% if (ventas.length === 0) { %>
+                <div class="empty-state">
+                    <i class="fa-solid fa-box-open"></i>
+                    <p>No se encontraron ventas con esos filtros.</p>
+                    <a href="/ventas/crear" class="btn-primary">Registrar primera venta</a>
+                </div>
+            <% } else { %>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Zona</th>
+                                <th>Ubicación</th>
+                                <th>Cliente</th>
+                                <th>Producto</th>
+                                <th>P. Unit.</th>
+                                <th>Cant.</th>
+                                <th>Total</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% ventas.forEach(venta => { %>
+                            <tr>
+                                <td><%= new Date(venta.fecha).toLocaleDateString('es-EC') %></td>
+                                <td><span class="badge badge-<%= venta.zona.toLowerCase() %>"><%= venta.zona %></span></td>
+                                <td><%= venta.ubicacion.entidad %> - Piso <%= venta.ubicacion.piso %></td>
+                                <td><%= venta.cliente %></td>
+                                <td><%= venta.producto %></td>
+                                <td>$<%= venta.precioUnitario.toFixed(2) %></td>
+                                <td><%= venta.cantidad %></td>
+                                <td class="total-cell">$<%= venta.total.toFixed(2) %></td>
+                                <td class="actions-cell">
+                                    <a href="/ventas/editar/<%= venta._id %>" class="btn-edit" title="Editar">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </a>
+                                    <a href="/ventas/eliminar/<%= venta._id %>" class="btn-delete" 
+                                       title="Eliminar"
+                                       onclick="return confirm('¿Eliminar esta venta?')">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                        <tfoot>
+                            <tr class="gran-total-row">
+                                <td colspan="7" class="text-right"><strong>GRAN TOTAL:</strong></td>
+                                <td class="total-cell"><strong>$<%= granTotal.toFixed(2) %></strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="results-count">
+                    <i class="fa-solid fa-circle-info"></i> 
+                    Mostrando <strong><%= ventas.length %></strong> venta(s)
+                </p>
+            <% } %>
+
+        </div>
+    </main>
+
+</body>
+</html>

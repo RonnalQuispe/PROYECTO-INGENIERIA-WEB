@@ -1,0 +1,26 @@
+{
+  "name": "ingenieriaweb",
+  "version": "1.0.0",
+  "description": "Sistema de ventas MVC con autenticación",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "connect-mongo": "^5.1.0",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "mongoose": "^8.4.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AdminExpress - Inicio</title>
+    <link rel="stylesheet" href="/css/styleApp.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="app-body">
+
+    <!-- Navbar -->
+    <header>
+        <%- include('../partials/navbar') %>
+    </header>
+
+    <!-- Contenido principal -->
+    <main class="app-main">
+        <section class="container">
+
+            <!-- Encabezado de página -->
+            <header class="page-header">
+                <h1>👋 Bienvenido, <strong>
+                        <%= usuario %>
+                    </strong></h1>
+                
+            </header>
+
+            <!-- Cards -->
+            <section class="cards-grid">
+
+                <article class="card info">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+
+                    <div class="card-info">
+                        <h2>Ver Ventas</h2>
+                        <p>Consulta y filtra todos los pedidos registrados</p>
+                    </div>
+
+                    <footer>
+                        <a href="/ventas" class="card-link">Ir al listado →</a>
+                    </footer>
+                </article>
+
+                <article class="card info">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-circle-plus"></i>
+                    </div>
+
+                    <div class="card-info">
+                        <h2>Nueva Venta</h2>
+                        <p>Registra un nuevo pedido del catálogo</p>
+                    </div>
+
+                    <footer>
+                        <a href="/ventas/crear" class="card-link">Registrar →</a>
+                    </footer>
+                </article>
+
+                <article class="card info">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+
+                    <div class="card-info">
+                        <h2>Consultas</h2>
+                        <p>Filtra por zona o cliente y ve el gran total</p>
+                    </div>
+
+                    <footer>
+                        <a href="/ventas?zona=&cliente=" class="card-link">Consultar →</a>
+                    </footer>
+                </article>
+
+            </section>
+
+        </section>
+    </main>
+
+</body>
+
+</html>

@@ -1,0 +1,330 @@
+/* ── Variables ─────────────────────────── */
+:root {
+    --primary: #F54927;
+
+    --bg-app: #f0f2f5;
+    --white: #ffffff;
+
+    --text-gray: #6b7280;
+    --border: #e5e7eb;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ── Body ─────────────────────────────── */
+.app-body {
+    background-color: var(--bg-app);
+
+}
+
+/* ── Navbar (con wrap) ────────────────── */
+.navbar {
+    background-color: var(--primary);
+    color: white;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    gap: 10px;
+}
+
+.nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    
+}
+
+/* ── Main ─────────────────────────────── */
+.app-main {
+    padding: 20px
+}
+
+/* ── Contenedor de Filtros Minimalista ── */
+.filter-box {
+    background: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border: none;
+}
+
+.filter-box h3 {
+    font-size: 0.9rem;
+    color: var(--text-gray);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Layout del Formulario ── */
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    /* Para móviles */
+    align-items: flex-end;
+    /* Alinea etiquetas y botones */
+    gap: 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1 1 200px;
+    /* Tamaño flexible */
+}
+
+.filter-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #444;
+}
+
+/* ── Estilo de Inputs y Selects ── */
+.filter-group input,
+.filter-group select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: #f9fafb;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245, 73, 39, 0.1);
+    background-color: #fff;
+}
+
+/* ── Botones de Acción ── */
+.filter-form button[type="submit"] {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+}
+
+.filter-form button[type="submit"]:hover {
+    background-color: #d43d1f;
+}
+
+.filter-form button[type="submit"]:active {
+    transform: scale(0.96);
+}
+
+.btn-secondary {
+    color: var(--text-gray);
+    text-decoration: none;
+    font-size: 0.85rem;
+    padding: 9px;
+    transition: color 0.2s;
+}
+
+.btn-secondary:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+/* ── Ajuste para móviles ── */
+@media (max-width: 600px) {
+    .filter-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        flex: 1 1 auto;
+    }
+}
+
+.container {
+    max-width: 90%;
+    margin: auto;
+    padding: 0 12px;
+}
+
+/* ── Header adaptable ─────────────────── */
+.page-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* ── Botones fluidos ─────────────────── */
+.btn-primary,
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* ── Cards más fluidas ───────────────── */
+.cards-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+
+}
+
+.card {
+    background: #f763467c;
+    flex: 1 1 260px;
+    min-width: 240px;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+
+.card.info {
+    padding: 16px;
+}
+
+.card .card-link {
+    margin-bottom: 16px;
+    text-decoration: none;
+    color: black;
+    border: none;
+    background: rgb(233, 229, 221);
+    padding: 10px;
+    border-radius: 5px;
+
+
+}
+
+.card .card-link:hover {
+    background: #F54927;
+    color: #ffffff;
+}
+
+/* ── Filtros con wrap ────────────────── */
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.filter-group {
+    flex: 1 1 180px;
+    min-width: 160px;
+}
+
+/* ── Tabla adaptable ─────────────────── */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+/* ── Acciones wrap ───────────────────── */
+.actions-cell {
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+/* ── Formularios responsive ─────────── */
+.input-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.input-row>* {
+    flex: 1 1 200px;
+}
+
+.input-group-sm {
+    flex: 1 1 120px;
+}
+.form-actions button{
+    background: #f549276e;
+    padding: 10px;
+    border: none;
+    border-radius: 12px;
+    color: white;
+    cursor: pointer;
+}
+.form-actions button:hover{
+    background: var(--primary);
+    color: white;
+}
+
+/* ── Empty state padding flexible ───── */
+.empty-state {
+    padding: clamp(30px, 6vw, 60px);
+}
+
+/* ── Ajustes extra sin media queries ── */
+img,
+table {
+    max-width: 100%;
+}
+
+
+/* ── Media query mínima ─────────────── */
+@media (max-width: 500px) {
+    .nav-link span {
+        display: none;
+    }
+}
+
+/* ── Tabla moderna ─────────────────── */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--white);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+/* Encabezado */
+thead {
+    background-color: var(--primary);
+    color: white;
+}
+
+thead th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+/* Celdas */
+tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Filas alternadas */
+tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+/* Hover animado */
+tbody tr {
+    transition: all 0.2s ease;
+}
+
+tbody tr:hover {
+    background-color: #ffe5df;
+    transform: scale(1.01);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Última fila sin borde */
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
