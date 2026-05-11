@@ -3,7 +3,7 @@
  */
 const express      = require('express');
 const router       = express.Router();
-const isLoggedIn   = require('../middleware/auth.middleware');
+const { isLoggedIn } = require('../middleware/auth.middleware');
 const carteraCtrl  = require('../controllers/cartera.controller');
 
 router.use(isLoggedIn);

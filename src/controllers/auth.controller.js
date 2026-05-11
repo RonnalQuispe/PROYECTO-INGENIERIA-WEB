@@ -1,5 +1,5 @@
 const Usuario = require('../models/usuario.model');
-
+const { generarToken } = require('../middleware/auth.middleware');
 // ── Mostrar página de login ──────────────────────────────────────────────────
 exports.mostrarLogin = (req, res) => {
     // Si ya hay sesión, ir directo al inicio
@@ -61,5 +61,44 @@ exports.crearUsuario = async (req, res) => {
         res.send('✅ Usuario admin creado con contraseña 1234. Ahora borra esta ruta del código.');
     } catch (err) {
         res.send('Error: ' + err.message);
+    }
+};
+// POST /api/v1/auth/login  →  responde JSON + JWT (para la app móvil)
+exports.loginAPI = async (req, res) => {
+    const { usuario, contrasena } = req.body;
+
+    try {
+        const usuarioEncontrado = await Usuario.findOne({ usuario });
+
+        if (!usuarioEncontrado) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuario o contraseña incorrectos.'
+            });
+        }
+
+        const esValida = await usuarioEncontrado.compararContrasena(contrasena);
+
+        if (!esValida) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuario o contraseña incorrectos.'
+            });
+        }
+
+        const token = generarToken(usuarioEncontrado);
+
+        res.status(200).json({
+            success: true,
+            token,
+            usuario: {
+                id:      usuarioEncontrado._id,
+                usuario: usuarioEncontrado.usuario
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error del servidor.' });
     }
 };

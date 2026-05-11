@@ -1,9 +1,9 @@
 const express    = require('express');
 const router     = express.Router();
-const isLoggedIn = require('../middleware/auth.middleware');
+const { isLoggedIn } = require('../middleware/auth.middleware'); // ← desestructura
 const ventasCtrl = require('../controllers/ventas.controller');
 
-router.use(isLoggedIn);
+router.use(isLoggedIn); 
 
 router.get('/',              ventasCtrl.listar);          // Listar + filtros
 router.get('/crear',         ventasCtrl.mostrarCrear);    // Formulario crear
