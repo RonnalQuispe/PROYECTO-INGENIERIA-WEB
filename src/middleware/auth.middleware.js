@@ -1,7 +1,17 @@
+// ============================================================
 // src/middleware/auth.middleware.js
+// ============================================================
+// Exporta TRES funciones:
+//   isLoggedIn  → protege rutas web (sesión Express)
+//   verifyJWT   → protege rutas /api/v1 (Bearer token)
+//   generarToken→ crea un JWT firmado para el login API
+// ============================================================
+
 const jwt = require('jsonwebtoken');
 
-// ── Para el navegador web (sin cambios en comportamiento) ────────────────────
+// ── 1. PROTECCIÓN WEB (sesión) ───────────────────────────────────────────────
+// Comportamiento IDÉNTICO al middleware original.
+// Si no hay sesión → redirige al login (navegador).
 const isLoggedIn = (req, res, next) => {
     if (req.session && req.session.usuarioId) {
         return next();
@@ -9,7 +19,10 @@ const isLoggedIn = (req, res, next) => {
     res.redirect('/login');
 };
 
-// ── Para la app móvil (JWT en el header Authorization) ──────────────────────
+// ── 2. PROTECCIÓN API (JWT) ──────────────────────────────────────────────────
+// Espera el header:  Authorization: Bearer <token>
+// Si el token es válido → adjunta req.usuarioId y req.usuario, llama next().
+// Si no → responde JSON 401/403 (nunca redirige, la app móvil no usa HTML).
 const verifyJWT = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // "Bearer <token>"
@@ -29,15 +42,20 @@ const verifyJWT = (req, res, next) => {
     } catch (err) {
         return res.status(403).json({
             success: false,
-            message: 'Token inválido o expirado.'
+            message: 'Token inválido o expirado. Vuelve a iniciar sesión.'
         });
     }
 };
 
-// ── Helper para generar tokens ───────────────────────────────────────────────
+// ── 3. GENERADOR DE TOKEN ────────────────────────────────────────────────────
+// Recibe el documento de Mongoose del usuario.
+// Devuelve un string JWT firmado con los datos mínimos necesarios.
 const generarToken = (usuario) => {
     return jwt.sign(
-        { id: usuario._id, usuario: usuario.usuario },
+        {
+            id:      usuario._id,
+            usuario: usuario.usuario
+        },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );

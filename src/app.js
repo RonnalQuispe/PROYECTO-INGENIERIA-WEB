@@ -28,7 +28,8 @@ app.use(session({
 app.use('/',         require('./routes/auth.routes'));
 app.use('/ventas',   require('./routes/ventas.routes'));
 app.use('/reportes', require('./routes/reportes.routes'));
-app.use('/cartera',  require('./routes/cartera.routes'));   // ← NUEVO
+app.use('/cartera',  require('./routes/cartera.routes'));   
+app.use('/api/v1', require('./routes/api.routes'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Servidor corriendo en http://localhost:${PORT}`));
