@@ -1,0 +1,469 @@
+/* ============================================================
+   cartera.css — Módulo Cartera de Clientes · Sistema Jalej
+   ============================================================ */
+
+/* ── KPI cards ─────────────────────────────────────────────── */
+.cartera-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.kpi-c {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px 24px;
+}
+
+.kpi-c .kpi-label {
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 6px;
+}
+
+.kpi-c .kpi-val {
+    font-size: 26px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.kpi-c .kpi-sub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.kpi-c.kpi-warn .kpi-val { color: #dc2626; }
+.kpi-c.kpi-ok   .kpi-val { color: #059669; }
+
+/* ── Filtros ────────────────────────────────────────────────── */
+.filter-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px 24px;
+    margin-bottom: 24px;
+}
+
+.filter-card h3 {
+    margin: 0 0 14px;
+    font-size: 15px;
+    color: #374151;
+}
+
+.filter-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-row .fg {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-width: 160px;
+}
+
+.filter-row label {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.filter-row select,
+.filter-row input {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+/* ── Tabla principal ────────────────────────────────────────── */
+.cartera-table-wrap {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.cartera-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.cartera-table thead {
+    background: #f9fafb;
+}
+
+.cartera-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.cartera-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.cartera-table tbody tr:last-child td { border-bottom: none; }
+.cartera-table tbody tr:hover         { background: #fafafa; }
+
+/* ── Nombre del cliente en tabla ────────────────────────────── */
+.cliente-nombre {
+    font-weight: 700;
+    color: #111827;
+}
+
+.cliente-facturas-pendientes {
+    font-size: 12px;
+    color: #9ca3af;
+    display: block;
+    margin-top: 2px;
+}
+
+/* ── Badges de nivel de riesgo ──────────────────────────────── */
+.nivel {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.nivel-al-dia  { background: #d1fae5; color: #065f46; }
+.nivel-medio   { background: #fef3c7; color: #92400e; }
+.nivel-alto    { background: #fee2e2; color: #991b1b; }
+.nivel-critico { background: #1f2937; color: #f9fafb; }
+
+/* ── Barra de progreso de cobro ─────────────────────────────── */
+.progress-wrap {
+    width: 100px;
+    background: #f3f4f6;
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+.progress-bar {
+    height: 8px;
+    border-radius: 99px;
+    background: #10b981;
+    transition: width .3s;
+}
+
+.progress-bar.med  { background: #f59e0b; }
+.progress-bar.low  { background: #ef4444; }
+.progress-bar.none { background: #dc2626; }
+
+.pct-label {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* ── Botón Ver detalle ──────────────────────────────────────── */
+.btn-detalle {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    padding: 5px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn-detalle:hover { background: #dbeafe; }
+
+/* ── Totales en tfoot ───────────────────────────────────────── */
+.tfoot-total td {
+    background: #f9fafb;
+    font-weight: 700;
+    padding: 14px 16px;
+    border-top: 2px solid #e5e7eb;
+}
+
+.tfoot-total .td-cobrado  { color: #059669; }
+.tfoot-total .td-pendiente { color: #dc2626; }
+
+/* ── Texto de resultado ─────────────────────────────────────── */
+.results-info {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+.empty-cartera {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.empty-cartera i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+/* ── Colores semánticos de celda ────────────────────────────── */
+.cell-deuda { color: #dc2626; font-weight: 700; }
+.cell-ok    { color: #059669; font-weight: 700; }
+.cell-cobrado { color: #059669; font-weight: 600; }
+
+/* ═══════════════════════════════════════════════════════════
+   DETALLE DE CLIENTE
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Back link ──────────────────────────────────────────────── */
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #6b7280;
+    font-size: 14px;
+    text-decoration: none;
+    margin-bottom: 16px;
+}
+
+.back-link:hover { color: #111827; }
+
+/* ── Header del cliente ─────────────────────────────────────── */
+.cliente-header {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.cliente-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: 700;
+    color: #1d4ed8;
+    flex-shrink: 0;
+}
+
+.cliente-info { flex: 1; }
+
+.cliente-info h2 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    color: #111827;
+}
+
+.cliente-info p {
+    margin: 0;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.cliente-info .pct-text {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 4px 0 0;
+    display: block;
+}
+
+/* ── KPIs del cliente ───────────────────────────────────────── */
+.cliente-kpis {
+    display: flex;
+    gap: 24px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+
+.ckpi { text-align: center; }
+
+.ckpi .cv {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.ckpi .cl {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.cv-cobrado { color: #059669; }
+.cv-deuda   { color: #dc2626; }
+.cv-ok      { color: #059669; }
+
+/* ── Barra de progreso global ───────────────────────────────── */
+.progress-global-wrap {
+    background: #f3f4f6;
+    border-radius: 99px;
+    height: 12px;
+    overflow: hidden;
+    margin: 16px 0 6px;
+}
+
+.progress-global-bar {
+    height: 12px;
+    border-radius: 99px;
+    background: #10b981;
+    transition: width .4s ease;
+}
+
+.progress-global-bar.med { background: #f59e0b; }
+.progress-global-bar.low { background: #ef4444; }
+
+/* ── Sección de facturas ────────────────────────────────────── */
+.section-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.section-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.section-card-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #111827;
+}
+
+.section-card-header .header-total-deuda { font-size: 13px; color: #dc2626; font-weight: 600; }
+.section-card-header .header-total-ok    { font-size: 13px; color: #059669; font-weight: 600; }
+
+/* ── Tabla de facturas ──────────────────────────────────────── */
+.det-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.det-table th {
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.det-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.det-table tbody tr:last-child td { border-bottom: none; }
+.det-table tbody tr:hover          { background: #fafafa; }
+
+.td-pagado { color: #059669; }
+.td-saldo  { color: #dc2626; font-weight: 700; }
+
+/* ── Badges de estado de pago ───────────────────────────────── */
+.badge-pagado    { background: #d1fae5; color: #065f46; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.badge-parcial   { background: #fef3c7; color: #92400e; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.badge-pendiente { background: #fee2e2; color: #991b1b; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+/* ── Historial de cobros expandible ─────────────────────────── */
+.cobros-toggle {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 0;
+}
+
+.cobros-lista {
+    display: none;
+    margin-top: 8px;
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.cobros-lista.abierta { display: block; }
+
+.cobro-item {
+    font-size: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid #e2e8f0;
+    color: #374151;
+}
+
+.cobro-item:last-child { border-bottom: none; }
+
+/* ── Sin cobros ─────────────────────────────────────────────── */
+.sin-abonos {
+    font-size: 12px;
+    color: #d1d5db;
+}
+
+/* ── Empty state detalle ────────────────────────────────────── */
+.empty-detalle {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.empty-detalle i {
+    font-size: 40px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+/* ── Iconos de color fijo ───────────────────────────────────── */
+.icon-warn   { color: #f59e0b; }
+.icon-ok     { color: #10b981; }
+.icon-danger { color: #dc2626; }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .cartera-table th:nth-child(3),
+    .cartera-table td:nth-child(3),
+    .cartera-table th:nth-child(6),
+    .cartera-table td:nth-child(6) { display: none; }
+
+    .kpi-val { font-size: 20px; }
+}
+
+@media (max-width: 640px) {
+    .cliente-kpis  { margin-left: 0; width: 100%; justify-content: space-between; }
+    .det-table th:nth-child(3),
+    .det-table td:nth-child(3) { display: none; }
+}

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= titulo %></title>
+    <link rel="stylesheet" href="/css/styleIndex.css">
+    <link rel="stylesheet" href="/css/styleApp.css">
+    <link rel="stylesheet" href="/css/cartera.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="app-body">
+
+    <%- include('../partials/navbar') -%>
+
+    <main class="app-main" id="main-content">
+        <div class="container">
+
+            <!-- ── Encabezado de página ── -->
+            <header class="page-header">
+                <h1><i class="fa-solid fa-wallet" aria-hidden="true"></i> Cartera de Clientes</h1>
+                <time datetime="<%= new Date().toISOString().split('T')[0] %>">
+                    <%= new Date().toLocaleDateString('es-EC', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) %>
+                </time>
+            </header>
+
+            <!-- ── KPIs ── -->
+            <section aria-label="Resumen financiero de cartera">
+                <div class="cartera-kpis">
+
+                    <article class="kpi-c">
+                        <p class="kpi-label"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i> Total facturado</p>
+                        <p class="kpi-val">$<%= kpis.totalCartera.toFixed(2) %></p>
+                        <p class="kpi-sub">Suma de todas las ventas</p>
+                    </article>
+
+                    <article class="kpi-c kpi-ok">
+                        <p class="kpi-label"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Total cobrado</p>
+                        <p class="kpi-val">$<%= kpis.totalCobrado.toFixed(2) %></p>
+                        <p class="kpi-sub">Pagos recibidos a la fecha</p>
+                    </article>
+
+                    <article class="kpi-c kpi-warn">
+                        <p class="kpi-label"><i class="fa-solid fa-clock" aria-hidden="true"></i> Saldo pendiente</p>
+                        <p class="kpi-val">$<%= kpis.totalPendiente.toFixed(2) %></p>
+                        <p class="kpi-sub">Por cobrar</p>
+                    </article>
+
+                    <article class="kpi-c">
+                        <p class="kpi-label"><i class="fa-solid fa-users" aria-hidden="true"></i> Clientes con deuda</p>
+                        <p class="kpi-val"><%= kpis.clientesEnDeuda %></p>
+                        <p class="kpi-sub">De <%= clientes.length %> clientes totales</p>
+                    </article>
+
+                </div>
+            </section>
+
+            <!-- ── Filtros ── -->
+            <section aria-label="Filtros de cartera">
+                <div class="filter-card">
+                    <h2><i class="fa-solid fa-filter" aria-hidden="true"></i> Filtrar cartera</h2>
+                    <form action="/cartera" method="GET" role="search">
+                        <div class="filter-row">
+                            <div class="fg">
+                                <label for="filtro-zona">Zona</label>
+                                <select id="filtro-zona" name="zona">
+                                    <option value="">Todas</option>
+                                    <option value="Norte"  <%= filtros.zona === 'Norte'  ? 'selected' : '' %>>Norte</option>
+                                    <option value="Centro" <%= filtros.zona === 'Centro' ? 'selected' : '' %>>Centro</option>
+                                    <option value="Sur"    <%= filtros.zona === 'Sur'    ? 'selected' : '' %>>Sur</option>
+                                </select>
+                            </div>
+                            <div class="fg">
+                                <label for="filtro-cliente">Cliente</label>
+                                <input
+                                    id="filtro-cliente"
+                                    type="search"
+                                    name="cliente"
+                                    placeholder="Buscar cliente..."
+                                    value="<%= filtros.cliente %>"
+                                    autocomplete="off"
+                                >
+                            </div>
+                            <button type="submit" class="btn-primary">
+                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Buscar
+                            </button>
+                            <a href="/cartera" class="btn-secondary">
+                                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Limpiar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- ── Tabla de clientes ── -->
+            <section aria-label="Listado de clientes en cartera">
+                <% if (clientes.length === 0) { %>
+                <div class="empty-cartera" role="status">
+                    <i class="fa-solid fa-wallet" aria-hidden="true"></i>
+                    <p>No se encontraron clientes con esos filtros.</p>
+                </div>
+                <% } else { %>
+
+                <div class="cartera-table-wrap">
+                    <table class="cartera-table">
+                        <caption class="sr-only">Cartera de clientes con saldos y estado de cobro</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Cliente</th>
+                                <th scope="col">Zona</th>
+                                <th scope="col">Pedidos</th>
+                                <th scope="col">Facturado</th>
+                                <th scope="col">Pagado</th>
+                                <th scope="col">Saldo</th>
+                                <th scope="col">Cobro</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col"><span class="sr-only">Acciones</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <% clientes.forEach(c => {
+                            const barClass = c.pctPagado >= 100 ? '' : c.pctPagado >= 60 ? 'med' : c.pctPagado >= 1 ? 'low' : 'none';
+                        %>
+                            <tr>
+                                <td>
+                                    <span class="cliente-nombre"><%= c._id %></span>
+                                    <% if (c.cantidadDeudas > 0) { %>
+                                    <span class="cliente-facturas-pendientes">
+                                        <%= c.cantidadDeudas %> factura(s) pendiente(s)
+                                    </span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <span class="badge badge-<%= c.zona.toLowerCase() %>"><%= c.zona %></span>
+                                </td>
+                                <td><strong><%= c.totalPedidos %></strong></td>
+                                <td>$<%= c.totalFacturado.toFixed(2) %></td>
+                                <td class="cell-cobrado">$<%= c.totalPagado.toFixed(2) %></td>
+                                <td class="<%= c.saldoPendiente > 0 ? 'cell-deuda' : 'cell-ok' %>">
+                                    $<%= c.saldoPendiente.toFixed(2) %>
+                                </td>
+                                <td>
+                                    <div class="progress-wrap" role="progressbar"
+                                         aria-valuenow="<%= c.pctPagado %>"
+                                         aria-valuemin="0" aria-valuemax="100"
+                                         aria-label="<%= c.pctPagado %>% cobrado">
+                                        <div class="progress-bar <%= barClass %>"
+                                             data-pct="<%= Math.min(c.pctPagado, 100) %>"></div>
+                                    </div>
+                                    <span class="pct-label"><%= c.pctPagado %>%</span>
+                                </td>
+                                <td>
+                                    <span class="nivel nivel-<%= c.nivel %>"><%= c.nivelLabel %></span>
+                                </td>
+                                <td>
+                                    <a href="/cartera/<%= encodeURIComponent(c._id) %>"
+                                       class="btn-detalle"
+                                       aria-label="Ver detalle de <%= c._id %>">
+                                        <i class="fa-solid fa-eye" aria-hidden="true"></i> Ver
+                                    </a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                        </tbody>
+                        <tfoot>
+                            <tr class="tfoot-total">
+                                <td colspan="3">TOTALES</td>
+                                <td>$<%= kpis.totalCartera.toFixed(2) %></td>
+                                <td class="td-cobrado">$<%= kpis.totalCobrado.toFixed(2) %></td>
+                                <td class="td-pendiente">$<%= kpis.totalPendiente.toFixed(2) %></td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <p class="results-info">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    <span><%= clientes.length %> cliente(s) encontrado(s)</span>
+                </p>
+
+                <% } %>
+            </section>
+
+        </div>
+    </main>
+
+    <script>
+    // Aplica width a las barras de progreso desde data-pct (evita CSS inline con EJS)
+    document.querySelectorAll('.progress-bar[data-pct]').forEach(function (bar) {
+        bar.style.width = Math.min(parseFloat(bar.dataset.pct) || 0, 100) + '%';
+    });
+    </script>
+
+</body>
+</html>

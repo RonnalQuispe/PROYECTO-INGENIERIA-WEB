@@ -146,7 +146,7 @@
                                 <td><%= venta.cantidad %></td>
                                 <td class="total-cell">$<%= venta.total.toFixed(2) %></td>
                                 <td class="total-cell">$<%= totalPagado.toFixed(2) %></td>
-                                <td class="total-cell" style="color:<%= saldo > 0 ? '#dc2626' : '#059669' %>">
+                                <td class="total-cell <%= saldo > 0 ? 'saldo-deuda' : 'saldo-ok' %>">
                                     $<%= saldo.toFixed(2) %>
                                 </td>
                                 <td>
@@ -180,8 +180,8 @@
                                             '<%= venta._id %>',
                                             '<%= venta.cliente %>',
                                             '<%= venta.producto %>',
-                                            <%= venta.total %>,
-                                            <%= totalPagado %>
+                                            '<%= venta.total %>',
+                                            '<%= totalPagado %>'
                                         )"
                                         title="Registrar cobro">
                                         <i class="fa-solid fa-money-bill-wave"></i> Cobrar

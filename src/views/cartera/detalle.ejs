@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= titulo %></title>
+    <link rel="stylesheet" href="/css/styleIndex.css">
+    <link rel="stylesheet" href="/css/styleApp.css">
+    <link rel="stylesheet" href="/css/cartera.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="app-body">
+
+    <%- include('../partials/navbar') -%>
+
+    <main class="app-main" id="main-content">
+        <div class="container">
+
+            <!-- ── Volver ── -->
+            <a href="/cartera" class="back-link">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                <span>Volver a Cartera</span>
+            </a>
+
+            <%
+                const iniciales = resumen.cliente.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+                const barClass  = resumen.pctPagado >= 100 ? '' : resumen.pctPagado >= 60 ? 'med' : 'low';
+                const pendientes = resumen.ventas.filter(v => v.estadoPago !== 'pagado');
+                const pagadas    = resumen.ventas.filter(v => v.estadoPago === 'pagado');
+                const totalDeuda = pendientes.reduce((s, v) => s + v.saldo, 0);
+                const totalCobrado = pagadas.reduce((s, v) => s + v.pagado, 0);
+            %>
+
+            <!-- ── Header del cliente ── -->
+            <header class="cliente-header">
+
+                <div class="cliente-avatar" aria-hidden="true"><%= iniciales %></div>
+
+                <div class="cliente-info">
+                    <h1><%= resumen.cliente %></h1>
+                    <p>
+                        <span class="badge badge-<%= resumen.zona.toLowerCase() %>"><%= resumen.zona %></span>
+                        &nbsp;·&nbsp;
+                        <span><%= resumen.totalPedidos %> pedido(s) registrado(s)</span>
+                    </p>
+                    <div class="progress-global-wrap"
+                         role="progressbar"
+                         aria-valuenow="<%= resumen.pctPagado %>"
+                         aria-valuemin="0"
+                         aria-valuemax="100"
+                         aria-label="<%= resumen.pctPagado %>% del total facturado cobrado">
+                        <div class="progress-global-bar <%= barClass %>"
+                             data-pct="<%= Math.min(resumen.pctPagado, 100) %>">
+                        </div>
+                    </div>
+                    <span class="pct-text"><%= resumen.pctPagado %>% pagado del total facturado</span>
+                </div>
+
+                <div class="cliente-kpis">
+                    <div class="ckpi">
+                        <p class="cv">$<%= resumen.totalFacturado.toFixed(2) %></p>
+                        <p class="cl">Facturado</p>
+                    </div>
+                    <div class="ckpi">
+                        <p class="cv cv-cobrado">$<%= resumen.totalPagado.toFixed(2) %></p>
+                        <p class="cl">Cobrado</p>
+                    </div>
+                    <div class="ckpi">
+                        <p class="cv <%= resumen.saldoPendiente > 0 ? 'cv-deuda' : 'cv-ok' %>">
+                            $<%= resumen.saldoPendiente.toFixed(2) %>
+                        </p>
+                        <p class="cl">Pendiente</p>
+                    </div>
+                </div>
+
+            </header>
+
+            <!-- ── Facturas pendientes ── -->
+            <% if (pendientes.length > 0) { %>
+            <section aria-label="Facturas pendientes de <%= resumen.cliente %>">
+                <div class="section-card">
+                    <header class="section-card-header">
+                        <h2>
+                            <i class="fa-solid fa-clock icon-warn" aria-hidden="true"></i>
+                            Facturas pendientes (<%= pendientes.length %>)
+                        </h2>
+                        <span class="header-total-deuda">
+                            Saldo total: $<%= totalDeuda.toFixed(2) %>
+                        </span>
+                    </header>
+
+                    <div class="table-responsive">
+                        <table class="det-table">
+                            <caption class="sr-only">Facturas pendientes de pago de <%= resumen.cliente %></caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Fecha</th>
+                                    <th scope="col">Producto</th>
+                                    <th scope="col">Cant.</th>
+                                    <th scope="col">Total</th>
+                                    <th scope="col">Pagado</th>
+                                    <th scope="col">Saldo</th>
+                                    <th scope="col">Estado</th>
+                                    <th scope="col">Abonos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <% pendientes.forEach(function (v, idx) { %>
+                                <tr>
+                                    <td>
+                                        <time datetime="<%= new Date(v.fecha).toISOString().split('T')[0] %>">
+                                            <%= new Date(v.fecha).toLocaleDateString('es-EC') %>
+                                        </time>
+                                    </td>
+                                    <td><strong><%= v.producto %></strong></td>
+                                    <td><%= v.cantidad %></td>
+                                    <td>$<%= v.total.toFixed(2) %></td>
+                                    <td class="td-pagado">$<%= v.pagado.toFixed(2) %></td>
+                                    <td class="td-saldo">$<%= v.saldo.toFixed(2) %></td>
+                                    <td>
+                                        <span class="badge-<%= v.estadoPago %>">
+                                            <% if (v.estadoPago === 'parcial') { %>
+                                                <i class="fa-solid fa-clock" aria-hidden="true"></i> Parcial
+                                            <% } else { %>
+                                                <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> Pendiente
+                                            <% } %>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <% if (v.cobros.length > 0) { %>
+                                        <button
+                                            class="cobros-toggle"
+                                            aria-expanded="false"
+                                            aria-controls="cobros-p<%= idx %>"
+                                            onclick="toggleCobros('p<%= idx %>', this)">
+                                            <i class="fa-solid fa-list" aria-hidden="true"></i>
+                                            <%= v.cobros.length %> abono(s)
+                                        </button>
+                                        <div class="cobros-lista" id="cobros-p<%= idx %>" hidden>
+                                            <% v.cobros.forEach(function (c) { %>
+                                            <div class="cobro-item">
+                                                <strong>$<%= c.monto.toFixed(2) %></strong> ·
+                                                <%= c.metodo %> ·
+                                                <time datetime="<%= new Date(c.fecha).toISOString().split('T')[0] %>">
+                                                    <%= new Date(c.fecha).toLocaleDateString('es-EC') %>
+                                                </time>
+                                                <% if (c.referencia) { %> · <span><%= c.referencia %></span><% } %>
+                                            </div>
+                                            <% }) %>
+                                        </div>
+                                        <% } else { %>
+                                        <span class="sin-abonos">—</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            <% } %>
+
+            <!-- ── Facturas pagadas ── -->
+            <% if (pagadas.length > 0) { %>
+            <section aria-label="Facturas pagadas de <%= resumen.cliente %>">
+                <div class="section-card">
+                    <header class="section-card-header">
+                        <h2>
+                            <i class="fa-solid fa-circle-check icon-ok" aria-hidden="true"></i>
+                            Facturas pagadas (<%= pagadas.length %>)
+                        </h2>
+                        <span class="header-total-ok">
+                            Total cobrado: $<%= totalCobrado.toFixed(2) %>
+                        </span>
+                    </header>
+
+                    <div class="table-responsive">
+                        <table class="det-table">
+                            <caption class="sr-only">Facturas pagadas de <%= resumen.cliente %></caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Fecha</th>
+                                    <th scope="col">Producto</th>
+                                    <th scope="col">Cant.</th>
+                                    <th scope="col">Total</th>
+                                    <th scope="col">Estado</th>
+                                    <th scope="col">Cobros</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <% pagadas.forEach(function (v, idx) { %>
+                                <tr>
+                                    <td>
+                                        <time datetime="<%= new Date(v.fecha).toISOString().split('T')[0] %>">
+                                            <%= new Date(v.fecha).toLocaleDateString('es-EC') %>
+                                        </time>
+                                    </td>
+                                    <td><strong><%= v.producto %></strong></td>
+                                    <td><%= v.cantidad %></td>
+                                    <td>$<%= v.total.toFixed(2) %></td>
+                                    <td>
+                                        <span class="badge-pagado">
+                                            <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Pagado
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <% if (v.cobros.length > 0) { %>
+                                        <button
+                                            class="cobros-toggle"
+                                            aria-expanded="false"
+                                            aria-controls="cobros-g<%= idx %>"
+                                            onclick="toggleCobros('g<%= idx %>', this)">
+                                            <i class="fa-solid fa-list" aria-hidden="true"></i>
+                                            <%= v.cobros.length %> cobro(s)
+                                        </button>
+                                        <div class="cobros-lista" id="cobros-g<%= idx %>" hidden>
+                                            <% v.cobros.forEach(function (c) { %>
+                                            <div class="cobro-item">
+                                                <strong>$<%= c.monto.toFixed(2) %></strong> ·
+                                                <%= c.metodo %> ·
+                                                <time datetime="<%= new Date(c.fecha).toISOString().split('T')[0] %>">
+                                                    <%= new Date(c.fecha).toLocaleDateString('es-EC') %>
+                                                </time>
+                                                <% if (c.referencia) { %> · <span><%= c.referencia %></span><% } %>
+                                            </div>
+                                            <% }) %>
+                                        </div>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            <% } %>
+
+            <!-- ── Sin ventas ── -->
+            <% if (resumen.ventas.length === 0) { %>
+            <div class="empty-detalle" role="status">
+                <i class="fa-solid fa-inbox" aria-hidden="true"></i>
+                <p>Este cliente no tiene ventas registradas.</p>
+            </div>
+            <% } %>
+
+        </div>
+    </main>
+
+    <script>
+    // Aplica width a las barras de progreso desde data-pct
+    document.querySelectorAll('[data-pct]').forEach(function (bar) {
+        bar.style.width = Math.min(parseFloat(bar.dataset.pct) || 0, 100) + '%';
+    });
+
+    // Toggle del historial de cobros con accesibilidad
+    function toggleCobros(id, btn) {
+        var panel = document.getElementById('cobros-' + id);
+        var abierto = !panel.hidden;
+        panel.hidden = abierto;
+        panel.classList.toggle('abierta', !abierto);
+        btn.setAttribute('aria-expanded', String(!abierto));
+    }
+    </script>
+
+</body>
+</html>
