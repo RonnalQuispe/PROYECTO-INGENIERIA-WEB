@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= titulo %></title>
+    <link rel="stylesheet" href="/css/styleIndex.css">
+    <link rel="stylesheet" href="/css/styleApp.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="app-body">
+
+    <%- include('../partials/navbar') -%>
+
+    <main class="app-main">
+    <div class="db-container">
+
+        <!-- ENCABEZADO -->
+        <header class="db-header">
+            <div class="db-header-left">
+                <h1 class="db-title">
+                    <i class="fa-solid fa-chart-line"></i> Dashboard Analítico
+                </h1>
+                <p class="db-subtitle">Inteligencia de Negocio · Sistema Jalej</p>
+            </div>
+            <div class="db-header-right">
+                <span class="db-user"><i class="fa-solid fa-circle-user"></i> <%= usuario %></span>
+                <span class="db-fecha" id="fechaActual"></span>
+            </div>
+        </header>
+
+        <!-- FILTROS -->
+        <section class="db-filtros">
+            <form action="/reportes" method="GET" class="filtros-form">
+                <div class="filtros-row">
+                    <div class="filtro-item">
+                        <label>Mes</label>
+                        <select name="mes">
+                            <option value="">Todos</option>
+                            <% ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                                'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+                               .forEach((m,i) => { %>
+                            <option value="<%= i+1 %>" <%= filtros.mes == i+1 ? 'selected':'' %>><%= m %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="filtro-item">
+                        <label>Año</label>
+                        <select name="anio">
+                            <option value="">Todos</option>
+                            <% aniosDisponibles.forEach(a => { %>
+                            <option value="<%= a %>" <%= filtros.anio == a ? 'selected':'' %>><%= a %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="filtro-item">
+                        <label>Zona</label>
+                        <select name="zona">
+                            <option value="">Todas</option>
+                            <option value="Norte"  <%= filtros.zona==='Norte'  ?'selected':'' %>>Norte</option>
+                            <option value="Centro" <%= filtros.zona==='Centro' ?'selected':'' %>>Centro</option>
+                            <option value="Sur"    <%= filtros.zona==='Sur'    ?'selected':'' %>>Sur</option>
+                        </select>
+                    </div>
+                    <div class="filtro-item">
+                        <label>Desde</label>
+                        <input type="date" name="fechaDesde" value="<%= filtros.fechaDesde %>">
+                    </div>
+                    <div class="filtro-item">
+                        <label>Hasta</label>
+                        <input type="date" name="fechaHasta" value="<%= filtros.fechaHasta %>">
+                    </div>
+                    <div class="filtro-btns">
+                        <button type="submit" class="btn-filtrar">
+                            <i class="fa-solid fa-magnifying-glass"></i> Aplicar
+                        </button>
+                        <a href="/reportes" class="btn-limpiar">
+                            <i class="fa-solid fa-rotate-left"></i> Limpiar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- KPI CARDS -->
+        <section class="kpi-grid">
+
+            <article class="kpi-card kpi-today">
+                <div class="kpi-icon"><i class="fa-solid fa-sun"></i></div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Ventas Hoy</span>
+                    <span class="kpi-value">$<%= kpis.totalHoy.toFixed(2) %></span>
+                    <span class="kpi-sub"><%= kpis.pedidosHoy %> pedido(s)</span>
+                </div>
+            </article>
+
+            <article class="kpi-card kpi-month">
+                <div class="kpi-icon"><i class="fa-solid fa-calendar-check"></i></div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Ventas del Mes</span>
+                    <span class="kpi-value">$<%= kpis.totalMes.toFixed(2) %></span>
+                    <span class="kpi-sub"><%= kpis.pedidosMes %> pedido(s)</span>
+                </div>
+                <div class="kpi-badge kpi-badge-<%= kpis.tendencia %>">
+                    <i class="fa-solid fa-arrow-<%= kpis.tendencia==='up'?'trend-up':'trend-down' %>"></i>
+                    <%= kpis.crecimientoMes %>%
+                </div>
+            </article>
+
+            <article class="kpi-card kpi-year">
+                <div class="kpi-icon"><i class="fa-solid fa-trophy"></i></div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Total Anual</span>
+                    <span class="kpi-value">$<%= kpis.totalAnio.toFixed(2) %></span>
+                    <span class="kpi-sub">Año en curso</span>
+                </div>
+            </article>
+
+            <article class="kpi-card kpi-ticket">
+                <div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Ticket Promedio</span>
+                    <span class="kpi-value">$<%= kpis.ticketPromedio.toFixed(2) %></span>
+                    <span class="kpi-sub">Por venta este mes</span>
+                </div>
+            </article>
+
+        </section>
+
+        <!-- GRÁFICAS FILA 1 -->
+        <section class="charts-row">
+            <div class="chart-card chart-wide">
+                <div class="chart-header">
+                    <h2><i class="fa-solid fa-chart-line"></i> Tendencia — Últimos 12 Meses</h2>
+                </div>
+                <div class="chart-body">
+                    <canvas id="chartVentasMes"></canvas>
+                </div>
+            </div>
+            <div class="chart-card chart-narrow">
+                <div class="chart-header">
+                    <h2><i class="fa-solid fa-chart-pie"></i> Participación por Zona</h2>
+                </div>
+                <div class="chart-body">
+                    <canvas id="chartZonas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- GRÁFICAS FILA 2 -->
+        <section class="charts-row">
+            <div class="chart-card chart-medium">
+                <div class="chart-header">
+                    <h2><i class="fa-solid fa-ranking-star"></i> Top 10 Productos</h2>
+                </div>
+                <div class="chart-body">
+                    <canvas id="chartTopProductos"></canvas>
+                </div>
+            </div>
+            <div class="chart-card chart-medium">
+                <div class="chart-header">
+                    <h2><i class="fa-solid fa-chart-bar"></i> Ventas por Día del Mes</h2>
+                </div>
+                <div class="chart-body">
+                    <canvas id="chartDias"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- TABLA: RANKING DE PRODUCTOS -->
+        <section class="table-section">
+            <div class="table-card">
+                <div class="table-card-header">
+                    <h2><i class="fa-solid fa-medal"></i> Ranking de Productos — Período Seleccionado</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="db-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Producto</th>
+                                <th>Unidades</th>
+                                <th>Ingresos</th>
+                                <th>Pedidos</th>
+                                <th>Rotación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <% if (topProductos.length === 0) { %>
+                            <tr><td colspan="6" class="empty-row">Sin datos para el período seleccionado</td></tr>
+                        <% } else { %>
+                        <% topProductos.forEach((p, i) => { %>
+                            <tr>
+                                <td>
+                                    <span class="rank-badge rank-<%= i < 3 ? i+1 : 'other' %>">
+                                        <%= i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i+1 %>
+                                    </span>
+                                </td>
+                                <td class="product-name"><%= p.producto %></td>
+                                <td>
+                                    <div class="bar-inline">
+                                        <div class="bar-fill" style="--pct:<%= Math.round((p.unidades / topProductos[0].unidades) * 100) %>"></div>
+                                        <span><%= p.unidades %></span>
+                                    </div>
+                                </td>
+                                <td class="money-cell">$<%= p.ingresos.toFixed(2) %></td>
+                                <td><%= p.pedidos %></td>
+                                <td>
+                                    <span class="badge-rotacion <%= i<3?'alta':i<6?'media':'baja' %>">
+                                        <%= i<3?'Alta':i<6?'Media':'Baja' %>
+                                    </span>
+                                </td>
+                            </tr>
+                        <% }) %>
+                        <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ZONAS + CLIENTES -->
+        <section class="two-col-section">
+
+            <div class="table-card">
+                <div class="table-card-header">
+                    <h2><i class="fa-solid fa-map"></i> Ventas por Zona</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="db-table">
+                        <thead>
+                            <tr><th>Zona</th><th>Total</th><th>Pedidos</th><th>Unidades</th></tr>
+                        </thead>
+                        <tbody>
+                        <% if (ventasPorZona.length === 0) { %>
+                            <tr><td colspan="4" class="empty-row">Sin datos</td></tr>
+                        <% } else { %>
+                        <% ventasPorZona.forEach(z => { %>
+                            <tr>
+                                <td><span class="badge badge-<%= z.zona.toLowerCase() %>"><%= z.zona %></span></td>
+                                <td class="money-cell">$<%= z.total.toFixed(2) %></td>
+                                <td><%= z.pedidos %></td>
+                                <td><%= z.unidades %></td>
+                            </tr>
+                        <% }) %>
+                        <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div class="table-card-header">
+                    <h2><i class="fa-solid fa-users"></i> Clientes Frecuentes</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="db-table">
+                        <thead>
+                            <tr><th>Cliente</th><th>Pedidos</th><th>Total</th><th>Zona</th></tr>
+                        </thead>
+                        <tbody>
+                        <% if (clientesFrecuentes.length === 0) { %>
+                            <tr><td colspan="4" class="empty-row">Sin datos</td></tr>
+                        <% } else { %>
+                        <% clientesFrecuentes.forEach(c => { %>
+                            <tr>
+                                <td class="product-name"><%= c.cliente %></td>
+                                <td><span class="pedidos-count"><%= c.pedidos %></span></td>
+                                <td class="money-cell">$<%= c.total.toFixed(2) %></td>
+                                <td><span class="badge badge-<%= c.zona.toLowerCase() %>"><%= c.zona %></span></td>
+                            </tr>
+                        <% }) %>
+                        <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- PRODUCTOS MENOS VENDIDOS -->
+        <section class="table-section">
+            <div class="table-card table-card-warning">
+                <div class="table-card-header">
+                    <h2><i class="fa-solid fa-triangle-exclamation"></i> Productos con Baja Rotación</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="db-table">
+                        <thead>
+                            <tr><th>Producto</th><th>Unidades</th><th>Ingresos</th><th>Alerta</th></tr>
+                        </thead>
+                        <tbody>
+                        <% if (productosMenos.length === 0) { %>
+                            <tr><td colspan="4" class="empty-row">Sin datos</td></tr>
+                        <% } else { %>
+                        <% productosMenos.forEach(p => { %>
+                            <tr class="row-warning">
+                                <td class="product-name"><%= p.producto %></td>
+                                <td><%= p.unidades %></td>
+                                <td class="money-cell">$<%= p.ingresos.toFixed(2) %></td>
+                                <td><span class="alerta-badge">⚠ Baja rotación</span></td>
+                            </tr>
+                        <% }) %>
+                        <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TOP PRODUCTOS POR MES HISTÓRICO -->
+        <section class="table-section">
+            <div class="table-card">
+                <div class="table-card-header historico-header">
+                    <h2><i class="fa-solid fa-calendar-alt"></i> Top Productos por Mes — Histórico Anual</h2>
+                    <form action="/reportes" method="GET" class="inline-form">
+                        <input type="hidden" name="mes"        value="<%= filtros.mes %>">
+                        <input type="hidden" name="anio"       value="<%= filtros.anio %>">
+                        <input type="hidden" name="zona"       value="<%= filtros.zona %>">
+                        <input type="hidden" name="fechaDesde" value="<%= filtros.fechaDesde %>">
+                        <input type="hidden" name="fechaHasta" value="<%= filtros.fechaHasta %>">
+                        <select name="anioHistorico" onchange="this.form.submit()">
+                            <% aniosDisponibles.forEach(a => { %>
+                            <option value="<%= a %>" <%= anioHistorico == a ? 'selected':'' %>>Año <%= a %></option>
+                            <% }) %>
+                        </select>
+                    </form>
+                </div>
+
+                <% const MESES_ORDEN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                                        'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']; %>
+                <% const mesesConDatos = MESES_ORDEN.filter(m => topPorMesHistorico[m]); %>
+
+                <% if (mesesConDatos.length === 0) { %>
+                    <p class="empty-row">No hay datos para el año <%= anioHistorico %>.</p>
+                <% } else { %>
+                <div class="historico-grid">
+                    <% mesesConDatos.forEach(mes => { %>
+                    <div class="historico-mes">
+                        <h3 class="historico-mes-titulo"><%= mes %></h3>
+                        <ol class="historico-lista">
+                            <% topPorMesHistorico[mes].forEach((p, i) => { %>
+                            <li class="historico-item">
+                                <span class="historico-rank"><%= i+1 %></span>
+                                <span class="historico-producto"><%= p.producto %></span>
+                                <span class="historico-und"><%= p.unidades %> und</span>
+                            </li>
+                            <% }) %>
+                        </ol>
+                    </div>
+                    <% }) %>
+                </div>
+                <% } %>
+            </div>
+        </section>
+
+        <!-- PROYECCIÓN DE ABASTECIMIENTO -->
+        <section class="table-section">
+            <div class="table-card table-card-info">
+                <div class="table-card-header">
+                    <h2><i class="fa-solid fa-boxes-stacking"></i> Proyección de Abastecimiento — Próximo Mes</h2>
+                    <span class="header-sub">Promedio 3 meses · +10% margen de seguridad</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="db-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Vendido (3M)</th>
+                                <th>Promedio/Mes</th>
+                                <th>Comprar Próximo Mes</th>
+                                <th>Prioridad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <% if (abastecimiento.length === 0) { %>
+                            <tr><td colspan="5" class="empty-row">Sin datos suficientes (necesitas al menos 1 mes de ventas)</td></tr>
+                        <% } else { %>
+                        <% abastecimiento.forEach((p, i) => { %>
+                            <tr>
+                                <td class="product-name"><%= p.producto %></td>
+                                <td><%= p.totalUnd %></td>
+                                <td><%= p.promedioPorMes %></td>
+                                <td><strong class="proyeccion-num"><%= p.proyeccionConMargen %> uds</strong></td>
+                                <td>
+                                    <span class="prioridad-badge prioridad-<%= i<3?'alta':i<8?'media':'normal' %>">
+                                        <%= i<3?'🔴 Alta':i<8?'🟡 Media':'🟢 Normal' %>
+                                    </span>
+                                </td>
+                            </tr>
+                        <% }) %>
+                        <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </div>
+    </main>
+
+    <!-- Datos para gráficas inyectados como data-attributes (evita errores del linter HTML) -->
+    <div id="chart-data" hidden
+        data-ventas-mes="<%- JSON.stringify(chartVentasMes) %>"
+        data-top-productos="<%- JSON.stringify(chartTopProductos) %>"
+        data-zonas="<%- JSON.stringify(chartZonas) %>"
+        data-dias="<%- JSON.stringify(chartDias) %>">
+    </div>
+
+    <script>
+    const _d = document.getElementById('chart-data').dataset;
+    const DATA_VENTAS_MES    = JSON.parse(_d.ventasMes);
+    const DATA_TOP_PRODUCTOS = JSON.parse(_d.topProductos);
+    const DATA_ZONAS         = JSON.parse(_d.zonas);
+    const DATA_DIAS          = JSON.parse(_d.dias);
+
+    const C = {
+        azul:'#3b82f6', verde:'#10b981', naranja:'#f59e0b',
+        violeta:'#8b5cf6', cyan:'#06b6d4', rosa:'#ec4899',
+        lima:'#84cc16', indigo:'#6366f1', amber:'#f97316', rojo:'#ef4444'
+    };
+    const LISTA  = Object.values(C);
+    const LISTA_BG = LISTA.map(c => c + 'bb');
+
+    const TOOLTIP = {
+        backgroundColor:'#1e293b', titleColor:'#f1f5f9',
+        bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1
+    };
+    const ESCALAS = {
+        x: { ticks:{ color:'#64748b' }, grid:{ color:'#1e293b33' } },
+        y: { ticks:{ color:'#64748b' }, grid:{ color:'#1e293b33' } }
+    };
+
+    // ── Gráfica 1: Línea — Tendencia mensual ──────────────
+    (() => {
+        const ctx = document.getElementById('chartVentasMes');
+        if (!ctx || !DATA_VENTAS_MES.length) return;
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: DATA_VENTAS_MES.map(d => d.etiqueta),
+                datasets: [{
+                    label: 'Ventas ($)',
+                    data:  DATA_VENTAS_MES.map(d => d.total),
+                    borderColor: C.azul, backgroundColor: C.azul+'22',
+                    borderWidth:2.5, pointRadius:4, fill:true, tension:0.4,
+                    pointBackgroundColor: C.azul
+                },{
+                    label: 'Pedidos',
+                    data:  DATA_VENTAS_MES.map(d => d.pedidos),
+                    borderColor: C.verde, backgroundColor:'transparent',
+                    borderWidth:2, pointRadius:3, borderDash:[5,3],
+                    pointBackgroundColor: C.verde, yAxisID:'y2'
+                }]
+            },
+            options: {
+                responsive:true, maintainAspectRatio:false,
+                plugins:{ legend:{ labels:{ color:'#94a3b8' } }, tooltip:TOOLTIP },
+                scales:{
+                    ...ESCALAS,
+                    y2:{ position:'right', ticks:{ color:C.verde }, grid:{ drawOnChartArea:false } }
+                }
+            }
+        });
+    })();
+
+    // ── Gráfica 2: Doughnut — Zonas ───────────────────────
+    (() => {
+        const ctx = document.getElementById('chartZonas');
+        if (!ctx || !DATA_ZONAS.length) return;
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: DATA_ZONAS.map(d => d.zona),
+                datasets:[{
+                    data:            DATA_ZONAS.map(d => d.total),
+                    backgroundColor: [C.azul, C.verde, C.naranja],
+                    borderColor:'#0f172a', borderWidth:3, hoverOffset:8
+                }]
+            },
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                plugins:{ legend:{ position:'bottom', labels:{ color:'#94a3b8', padding:16 } }, tooltip:TOOLTIP }
+            }
+        });
+    })();
+
+    // ── Gráfica 3: Barras horizontales — Top productos ─────
+    (() => {
+        const ctx = document.getElementById('chartTopProductos');
+        if (!ctx || !DATA_TOP_PRODUCTOS.length) return;
+        new Chart(ctx, {
+            type:'bar',
+            data:{
+                labels: DATA_TOP_PRODUCTOS.map(d => d.producto),
+                datasets:[{
+                    label:'Unidades',
+                    data:  DATA_TOP_PRODUCTOS.map(d => d.unidades),
+                    backgroundColor: DATA_TOP_PRODUCTOS.map((_,i) => LISTA_BG[i % LISTA_BG.length]),
+                    borderColor:     DATA_TOP_PRODUCTOS.map((_,i) => LISTA[i % LISTA.length]),
+                    borderWidth:1.5, borderRadius:4
+                }]
+            },
+            options:{
+                responsive:true, maintainAspectRatio:false, indexAxis:'y',
+                plugins:{ legend:{ display:false }, tooltip:TOOLTIP },
+                scales: ESCALAS
+            }
+        });
+    })();
+
+    // ── Gráfica 4: Barras — Ventas por día ────────────────
+    (() => {
+        const ctx = document.getElementById('chartDias');
+        if (!ctx || !DATA_DIAS.length) return;
+        new Chart(ctx, {
+            type:'bar',
+            data:{
+                labels: DATA_DIAS.map(d => 'Día '+d.dia),
+                datasets:[{
+                    label:'Ventas ($)',
+                    data:  DATA_DIAS.map(d => d.total),
+                    backgroundColor: C.violeta+'bb',
+                    borderColor:     C.violeta,
+                    borderWidth:1.5, borderRadius:4
+                }]
+            },
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                plugins:{ legend:{ display:false }, tooltip:TOOLTIP },
+                scales: ESCALAS
+            }
+        });
+    })();
+
+    // ── Fecha actual ──────────────────────────────────────
+    document.getElementById('fechaActual').textContent =
+        new Date().toLocaleDateString('es-EC',{
+            weekday:'long', year:'numeric', month:'long', day:'numeric'
+        });
+    </script>
+
+</body>
+</html>

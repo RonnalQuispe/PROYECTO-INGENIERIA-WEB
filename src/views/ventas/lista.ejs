@@ -7,6 +7,59 @@
     <link rel="stylesheet" href="/css/styleIndex.css">
     <link rel="stylesheet" href="/css/styleApp.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* ── Badges de estado de pago ── */
+        .badge-pagado    { background:#d1fae5; color:#065f46; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+        .badge-parcial   { background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+        .badge-pendiente { background:#fee2e2; color:#991b1b; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+
+        /* ── Botón cobrar ── */
+        .btn-cobrar { background:#10b981; color:#fff; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:13px; }
+        .btn-cobrar:hover { background:#059669; }
+        .btn-cobrar:disabled { background:#9ca3af; cursor:not-allowed; }
+
+        /* ── Modal overlay ── */
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#fff; border-radius:12px; padding:28px 32px; width:100%; max-width:460px; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+        .modal-box h2 { margin:0 0 4px; font-size:18px; }
+        .modal-box .modal-sub { color:#6b7280; font-size:13px; margin:0 0 20px; }
+        .modal-resumen { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:12px 16px; margin-bottom:20px; font-size:14px; }
+        .modal-resumen p { margin:4px 0; }
+        .modal-resumen .saldo { font-size:20px; font-weight:700; color:#10b981; }
+        .modal-field { margin-bottom:14px; }
+        .modal-field label { display:block; font-size:13px; color:#374151; margin-bottom:5px; font-weight:500; }
+        .modal-field input,
+        .modal-field select { width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; }
+        .modal-field input:focus,
+        .modal-field select:focus { outline:none; border-color:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,0.15); }
+        .modal-error { color:#dc2626; font-size:13px; margin:0 0 12px; display:none; }
+        .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+        .btn-modal-cancel { background:none; border:1px solid #d1d5db; padding:8px 18px; border-radius:6px; cursor:pointer; font-size:14px; }
+        .btn-modal-cancel:hover { background:#f3f4f6; }
+        .btn-modal-confirm { background:#10b981; color:#fff; border:none; padding:8px 18px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600; }
+        .btn-modal-confirm:hover { background:#059669; }
+
+        /* ── Confirm overlay (doble confirmación) ── */
+        .confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1100; align-items:center; justify-content:center; }
+        .confirm-overlay.active { display:flex; }
+        .confirm-box { background:#fff; border-radius:12px; padding:28px 32px; width:100%; max-width:380px; text-align:center; }
+        .confirm-box .confirm-icon { font-size:40px; margin-bottom:12px; }
+        .confirm-box h3 { margin:0 0 8px; font-size:17px; }
+        .confirm-box p  { color:#6b7280; font-size:14px; margin:0 0 22px; }
+        .confirm-footer { display:flex; gap:10px; justify-content:center; }
+        .btn-confirm-yes { background:#10b981; color:#fff; border:none; padding:9px 24px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600; }
+        .btn-confirm-yes:hover { background:#059669; }
+        .btn-confirm-no  { background:#ef4444; color:#fff; border:none; padding:9px 24px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600; }
+        .btn-confirm-no:hover { background:#dc2626; }
+
+        /* ── Historial de cobros ── */
+        .historial-toggle { background:none; border:none; color:#3b82f6; cursor:pointer; font-size:12px; text-decoration:underline; }
+        .historial-panel { display:none; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; margin-top:6px; font-size:12px; }
+        .historial-panel.open { display:block; }
+        .historial-item { padding:4px 0; border-bottom:1px solid #e2e8f0; }
+        .historial-item:last-child { border-bottom:none; }
+    </style>
 </head>
 <body class="app-body">
 
@@ -17,12 +70,10 @@
 
             <div class="page-header">
                 <h1><i class="fa-solid fa-list"></i> Registro de Ventas</h1>
-                <a href="/ventas/crear" class="btn-primary">
-                     Nueva Venta
-                </a>
+                <a href="/ventas/crear" class="btn-primary">Nueva Venta</a>
             </div>
 
-            <!-- ── FORMULARIO DE FILTROS ── -->
+            <!-- FILTROS -->
             <div class="filter-box">
                 <h3><i class="fa-solid fa-filter"></i> Filtrar por:</h3>
                 <form action="/ventas" method="GET" class="filter-form">
@@ -39,12 +90,21 @@
                         <label>Cliente</label>
                         <input type="text" name="cliente" placeholder="Buscar cliente..." value="<%= filtros.cliente %>">
                     </div>
+                    <div class="filter-group">
+                        <label>Estado de pago</label>
+                        <select name="estadoPago">
+                            <option value="">Todos</option>
+                            <option value="pendiente" <%= filtros.estadoPago === 'pendiente' ? 'selected' : '' %>>Pendiente</option>
+                            <option value="parcial"   <%= filtros.estadoPago === 'parcial'   ? 'selected' : '' %>>Parcial</option>
+                            <option value="pagado"    <%= filtros.estadoPago === 'pagado'    ? 'selected' : '' %>>Pagado</option>
+                        </select>
+                    </div>
                     <button type="submit" class="btn-primary">Buscar</button>
                     <a href="/ventas" class="btn-secondary">Limpiar</a>
                 </form>
             </div>
 
-            <!-- ── TABLA DE RESULTADOS ── -->
+            <!-- TABLA -->
             <% if (ventas.length === 0) { %>
                 <div class="empty-state">
                     <i class="fa-solid fa-box-open"></i>
@@ -64,11 +124,18 @@
                                 <th>P. Unit.</th>
                                 <th>Cant.</th>
                                 <th>Total</th>
+                                <th>Pagado</th>
+                                <th>Saldo</th>
+                                <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <% ventas.forEach(venta => { %>
+                            <% ventas.forEach(venta => {
+                                const estadoPago  = venta.estadoPago  || 'pendiente';
+                                const totalPagado = venta.totalPagado || 0;
+                                const saldo       = Math.max(0, venta.total - totalPagado);
+                            %>
                             <tr>
                                 <td><%= new Date(venta.fecha).toLocaleDateString('es-EC') %></td>
                                 <td><span class="badge badge-<%= venta.zona.toLowerCase() %>"><%= venta.zona %></span></td>
@@ -78,11 +145,52 @@
                                 <td>$<%= venta.precioUnitario.toFixed(2) %></td>
                                 <td><%= venta.cantidad %></td>
                                 <td class="total-cell">$<%= venta.total.toFixed(2) %></td>
+                                <td class="total-cell">$<%= totalPagado.toFixed(2) %></td>
+                                <td class="total-cell" style="color:<%= saldo > 0 ? '#dc2626' : '#059669' %>">
+                                    $<%= saldo.toFixed(2) %>
+                                </td>
+                                <td>
+                                    <span class="badge-<%= estadoPago %>">
+                                        <% if (estadoPago === 'pagado')    { %><i class="fa-solid fa-circle-check"></i> Pagado
+                                        <% } else if (estadoPago === 'parcial') { %><i class="fa-solid fa-clock"></i> Parcial
+                                        <% } else { %><i class="fa-solid fa-circle-xmark"></i> Pendiente<% } %>
+                                    </span>
+                                    <% if ((venta.cobros || []).length > 0) { %>
+                                    <br>
+                                    <button class="historial-toggle" onclick="toggleHistorial('<%= venta._id %>')">
+                                        ver cobros (<%= venta.cobros.length %>)
+                                    </button>
+                                    <div class="historial-panel" id="hist-<%= venta._id %>">
+                                        <% venta.cobros.forEach(c => { %>
+                                        <div class="historial-item">
+                                            <strong>$<%= c.monto.toFixed(2) %></strong> ·
+                                            <%= c.metodo %> ·
+                                            <%= new Date(c.fecha).toLocaleDateString('es-EC') %>
+                                            <% if (c.referencia) { %> · Ref: <%= c.referencia %><% } %>
+                                        </div>
+                                        <% }) %>
+                                    </div>
+                                    <% } %>
+                                </td>
                                 <td class="actions-cell">
+                                    <!-- Botón cobrar (oculto si ya está pagado) -->
+                                    <% if (estadoPago !== 'pagado') { %>
+                                    <button class="btn-cobrar"
+                                        onclick="abrirModalCobro(
+                                            '<%= venta._id %>',
+                                            '<%= venta.cliente %>',
+                                            '<%= venta.producto %>',
+                                            <%= venta.total %>,
+                                            <%= totalPagado %>
+                                        )"
+                                        title="Registrar cobro">
+                                        <i class="fa-solid fa-money-bill-wave"></i> Cobrar
+                                    </button>
+                                    <% } %>
                                     <a href="/ventas/editar/<%= venta._id %>" class="btn-edit" title="Editar">
                                         <i class="fa-solid fa-pen"></i>
                                     </a>
-                                    <a href="/ventas/eliminar/<%= venta._id %>" class="btn-delete" 
+                                    <a href="/ventas/eliminar/<%= venta._id %>" class="btn-delete"
                                        title="Eliminar"
                                        onclick="return confirm('¿Eliminar esta venta?')">
                                         <i class="fa-solid fa-trash"></i>
@@ -95,19 +203,169 @@
                             <tr class="gran-total-row">
                                 <td colspan="7" class="text-right"><strong>GRAN TOTAL:</strong></td>
                                 <td class="total-cell"><strong>$<%= granTotal.toFixed(2) %></strong></td>
-                                <td></td>
+                                <td colspan="4"></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
                 <p class="results-count">
-                    <i class="fa-solid fa-circle-info"></i> 
+                    <i class="fa-solid fa-circle-info"></i>
                     Mostrando <strong><%= ventas.length %></strong> venta(s)
                 </p>
             <% } %>
 
         </div>
     </main>
+
+    <!-- ══ MODAL: REGISTRAR COBRO ══════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modalCobro">
+        <div class="modal-box">
+            <h2><i class="fa-solid fa-money-bill-wave" style="color:#10b981"></i> Registrar cobro</h2>
+            <p class="modal-sub" id="modal-sub">Cliente · Producto</p>
+
+            <div class="modal-resumen">
+                <p>Total de la venta: <strong id="modal-total">$0.00</strong></p>
+                <p>Ya pagado: <strong id="modal-pagado">$0.00</strong></p>
+                <p>Saldo pendiente: <span class="saldo" id="modal-saldo">$0.00</span></p>
+            </div>
+
+            <p class="modal-error" id="modal-error">El monto no puede superar el saldo pendiente.</p>
+
+            <div class="modal-field">
+                <label>Monto a cobrar ($)</label>
+                <input type="number" id="input-monto" min="0.01" step="0.01" placeholder="0.00"
+                       oninput="validarMonto()">
+            </div>
+            <div class="modal-field">
+                <label>Método de pago</label>
+                <select id="input-metodo">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="deposito">Depósito</option>
+                </select>
+            </div>
+            <div class="modal-field">
+                <label>Referencia <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
+                <input type="text" id="input-referencia" placeholder="Nro. transacción, comprobante...">
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn-modal-confirm" id="btn-confirmar" onclick="confirmarCobro()">
+                    <i class="fa-solid fa-check"></i> Confirmar cobro
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: DOBLE CONFIRMACIÓN (cobro total) ═════════════════════════ -->
+    <div class="confirm-overlay" id="confirmTotal">
+        <div class="confirm-box">
+            <div class="confirm-icon">✅</div>
+            <h3>¿Marcar como PAGADO?</h3>
+            <p>Este monto cubre el saldo completo.<br>La venta quedará cerrada como <strong>Pagada</strong>.</p>
+            <div class="confirm-footer">
+                <button class="btn-confirm-no"  onclick="cancelarConfirm()">No, volver</button>
+                <button class="btn-confirm-yes" onclick="ejecutarCobro()">Sí, marcar como pagado</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let _ventaId   = '';
+    let _total     = 0;
+    let _pagado    = 0;
+    let _saldo     = 0;
+
+    function abrirModalCobro(id, cliente, producto, total, pagado) {
+        _ventaId = id;
+        _total   = total;
+        _pagado  = pagado;
+        _saldo   = Math.max(0, total - pagado);
+
+        document.getElementById('modal-sub').textContent    = cliente + ' · ' + producto;
+        document.getElementById('modal-total').textContent  = '$' + total.toFixed(2);
+        document.getElementById('modal-pagado').textContent = '$' + pagado.toFixed(2);
+        document.getElementById('modal-saldo').textContent  = '$' + _saldo.toFixed(2);
+        document.getElementById('input-monto').value        = _saldo.toFixed(2);
+        document.getElementById('input-monto').max          = _saldo;
+        document.getElementById('input-referencia').value   = '';
+        document.getElementById('modal-error').style.display = 'none';
+        document.getElementById('btn-confirmar').disabled   = false;
+
+        document.getElementById('modalCobro').classList.add('active');
+    }
+
+    function cerrarModal() {
+        document.getElementById('modalCobro').classList.remove('active');
+    }
+
+    function validarMonto() {
+        const monto = parseFloat(document.getElementById('input-monto').value) || 0;
+        const err   = document.getElementById('modal-error');
+        const btn   = document.getElementById('btn-confirmar');
+        if (monto <= 0 || monto > _saldo) {
+            err.style.display = 'block';
+            btn.disabled = true;
+        } else {
+            err.style.display = 'none';
+            btn.disabled = false;
+        }
+    }
+
+    function confirmarCobro() {
+        const monto = parseFloat(document.getElementById('input-monto').value) || 0;
+        if (monto <= 0 || monto > _saldo) return;
+
+        // Si el monto cubre el saldo exacto → doble confirmación
+        if (Math.abs(monto - _saldo) < 0.001) {
+            cerrarModal();
+            document.getElementById('confirmTotal').classList.add('active');
+        } else {
+            ejecutarCobro();
+        }
+    }
+
+    function cancelarConfirm() {
+        document.getElementById('confirmTotal').classList.remove('active');
+        document.getElementById('modalCobro').classList.add('active');
+    }
+
+    async function ejecutarCobro() {
+        document.getElementById('confirmTotal').classList.remove('active');
+
+        const monto      = parseFloat(document.getElementById('input-monto').value);
+        const metodo     = document.getElementById('input-metodo').value;
+        const referencia = document.getElementById('input-referencia').value.trim();
+
+        try {
+            const resp = await fetch('/ventas/cobrar/' + _ventaId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ monto, metodo, referencia })
+            });
+
+            if (resp.ok) {
+                window.location.reload();
+            } else {
+                const data = await resp.json();
+                alert('Error: ' + (data.error || 'No se pudo registrar el cobro.'));
+            }
+        } catch (e) {
+            alert('Error de conexión. Intenta de nuevo.');
+        }
+    }
+
+    function toggleHistorial(id) {
+        const panel = document.getElementById('hist-' + id);
+        panel.classList.toggle('open');
+    }
+
+    // Cerrar modal al hacer clic fuera
+    document.getElementById('modalCobro').addEventListener('click', function(e) {
+        if (e.target === this) cerrarModal();
+    });
+    </script>
 
 </body>
 </html>
