@@ -32,4 +32,7 @@ app.use('/cartera',  require('./routes/cartera.routes'));
 app.use('/api/v1', require('./routes/api.routes'));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Servidor corriendo en http://localhost:${PORT}`));
+// Agregamos '0.0.0.0' para que sea accesible desde internet
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
+});
