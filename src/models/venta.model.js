@@ -11,6 +11,15 @@ const cobroSchema = new mongoose.Schema({
     cobradoPor: { type: String, trim: true, default: '' }
 }, { _id: true });
 
+// ── Ítem de pedido multi-producto ────────────────────────────────────────────
+const itemSchema = new mongoose.Schema({
+    nombre:    { type: String, required: true, trim: true },
+    cantidad:  { type: Number, required: true, min: 1 },
+    precio:    { type: Number, required: true, min: 0 },
+    subtotal:  { type: Number, required: true, min: 0 },
+    entregado: { type: Boolean, default: false }
+}, { _id: true });
+
 const ventaSchema = new mongoose.Schema({
     zona: { type: String, required: true, enum: ['Norte', 'Centro', 'Sur'] },
 
@@ -19,9 +28,6 @@ const ventaSchema = new mongoose.Schema({
         piso:    { type: String, default: '' }
     },
 
-    // ── Referencias a colecciones nuevas (ObjectId) ──────────────────────────
-    // clienteRef y entidadRef son opcionales para mantener compatibilidad
-    // con ventas antiguas que solo tienen texto en cliente/ubicacion.entidad
     clienteRef: {
         type:    mongoose.Schema.Types.ObjectId,
         ref:     'Cliente',
@@ -33,55 +39,45 @@ const ventaSchema = new mongoose.Schema({
         default: null
     },
 
-    // ── Campos de texto (compatibilidad con datos existentes) ────────────────
+    // ── Campos legacy (compatibilidad) ───────────────────────────────────────
     cliente:        { type: String, required: true, trim: true },
     producto:       { type: String, required: true, trim: true },
     precioUnitario: { type: Number, required: true, min: 0 },
     cantidad:       { type: Number, required: true, min: 1 },
     total:          { type: Number, required: true, min: 0 },
 
-    // ── Tipo de transacción ──────────────────────────────────────────────────
-    // 'venta'  → entrega inmediata, no requiere seguimiento
-    // 'pedido' → puede tener entrega pendiente o futura
+    // ── Multi-producto ───────────────────────────────────────────────────────
+    // Si viene vacío → venta legacy de un solo producto
+    // Si viene con ítems → venta multi-producto (app móvil)
+    items: { type: [itemSchema], default: [] },
+
     tipoTransaccion: {
         type:    String,
         enum:    ['venta', 'pedido'],
         default: 'venta'
     },
 
-    // ── Estado de entrega (nuevo) ────────────────────────────────────────────
     estadoEntrega: {
         type:    String,
         enum:    ['Inmediata', 'Pendiente', 'Entregado', 'Cancelado'],
         default: 'Inmediata'
     },
 
-    // ── Estado de pago ───────────────────────────────────────────────────────
     estadoPago:  { type: String, enum: ['pendiente', 'parcial', 'pagado'], default: 'pendiente' },
     totalPagado: { type: Number, default: 0, min: 0 },
     cobros:      { type: [cobroSchema], default: [] },
 
     fecha: { type: Date, default: Date.now },
 
-    // ── Campos para soporte offline ──────────────────────────────────────────
-    clientTempId: {
-        type:    String,
-        default: null,
-        index:   true
-    },
-    creadoPorDispositivo: {
-        type:    String,
-        default: null
-    }
+    clientTempId:        { type: String, default: null, index: true },
+    creadoPorDispositivo:{ type: String, default: null }
 
 }, { timestamps: true });
 
-// ── Virtual: saldo pendiente ─────────────────────────────────────────────────
 ventaSchema.virtual('saldoPendiente').get(function () {
     return Math.max(0, this.total - this.totalPagado);
 });
 
-// ── Pre-save: recalcula estadoPago automáticamente ───────────────────────────
 ventaSchema.pre('save', function (next) {
     if (this.totalPagado <= 0) {
         this.estadoPago = 'pendiente';
@@ -91,7 +87,6 @@ ventaSchema.pre('save', function (next) {
     } else {
         this.estadoPago = 'parcial';
     }
-    // Si es venta inmediata, forzar estadoEntrega = Inmediata
     if (this.tipoTransaccion === 'venta') {
         this.estadoEntrega = 'Inmediata';
     }

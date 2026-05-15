@@ -18,26 +18,27 @@ router.post('/auth/login', authCtrl.loginAPI);
 router.use(verifyJWT);
 
 // ── CLIENTES ──────────────────────────────────────────────────────────────────
-router.get('/clientes',         clientesCtrl.buscarClientes);
-router.post('/clientes',        clientesCtrl.crearCliente);
+router.get('/clientes',                              clientesCtrl.buscarClientes);
+router.post('/clientes',                             clientesCtrl.crearCliente);
 
 // ── ENTIDADES ─────────────────────────────────────────────────────────────────
-router.get('/entidades',        clientesCtrl.buscarEntidades);
-router.post('/entidades',       clientesCtrl.crearEntidad);
+router.get('/entidades',                             clientesCtrl.buscarEntidades);
+router.post('/entidades',                            clientesCtrl.crearEntidad);
 
 // ── VENTAS ────────────────────────────────────────────────────────────────────
-router.get('/ventas',                    ventasCtrl.listarAPI);
-router.post('/ventas',                   ventasCtrl.guardarAPI);
-router.put('/ventas/:id',                ventasCtrl.actualizarAPI);
-router.delete('/ventas/:id',             ventasCtrl.eliminarAPI);
-router.post('/ventas/:id/cobros',        ventasCtrl.registrarCobroAPI);
+router.get('/ventas',                                ventasCtrl.listarAPI);
+router.post('/ventas',                               ventasCtrl.guardarAPI);
+router.put('/ventas/:id',                            ventasCtrl.actualizarAPI);
+router.delete('/ventas/:id',                         ventasCtrl.eliminarAPI);
+router.post('/ventas/:id/cobros',                    ventasCtrl.registrarCobroAPI);
+router.patch('/ventas/:id/items/:itemId/entrega',    ventasCtrl.actualizarEntregaItemAPI); // ← NUEVO
 
 // ── CARTERA ───────────────────────────────────────────────────────────────────
-router.get('/cartera',                   carteraCtrl.listarAPI);
-router.get('/cartera/:cliente',          carteraCtrl.detalleAPI);
+router.get('/cartera',                               carteraCtrl.listarAPI);
+router.get('/cartera/:cliente',                      carteraCtrl.detalleAPI);
 
 // ── REPORTES ──────────────────────────────────────────────────────────────────
-router.get('/reportes/kpis',             reportesCtrl.kpisAPI);
-router.get('/reportes/dashboard',        reportesCtrl.dashboardAPI);
+router.get('/reportes/kpis',                         reportesCtrl.kpisAPI);
+router.get('/reportes/dashboard',                    reportesCtrl.dashboardAPI);
 
 module.exports = router;
