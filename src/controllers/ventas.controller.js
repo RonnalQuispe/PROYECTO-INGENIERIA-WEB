@@ -1,5 +1,6 @@
 // ============================================================
 // src/controllers/ventas.controller.js
+// ✅ CORRECCIÓN: Añadido exports.mostrarDetalle para GET /ventas/detalle/:id
 // ============================================================
 
 const Venta = require('../models/venta.model');
@@ -22,7 +23,6 @@ const validarVenta = ({ zona, cliente, producto, precioUnitario, cantidad }) => 
     return errores;
 };
 
-// Valida un array de ítems multi-producto
 const validarItems = (items) => {
     const errores = [];
     if (!Array.isArray(items) || items.length === 0) {
@@ -43,7 +43,7 @@ const validarItems = (items) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// WEB — sin cambios
+// WEB
 // ─────────────────────────────────────────────────────────────
 
 exports.listar = async (req, res) => {
@@ -123,6 +123,28 @@ exports.guardar = async (req, res) => {
     }
 };
 
+// ✅ NUEVO: Mostrar detalle completo de una venta (web)
+exports.mostrarDetalle = async (req, res) => {
+    try {
+        const venta = await Venta.findById(req.params.id).lean();
+        if (!venta) return res.redirect('/ventas');
+
+        // Calcular saldo para la vista
+        venta.saldo = Math.max(0, venta.total - (venta.totalPagado || 0));
+
+        res.render('ventas/detalle', {
+            usuario: req.session.usuario,
+            titulo:  `Venta · ${venta.cliente}`,
+            venta,
+            mensaje: req.query.ok  ? 'Venta actualizada correctamente.' : null,
+            error:   req.query.err ? 'Error al actualizar la venta.'     : null,
+        });
+    } catch (error) {
+        console.error('Error mostrar detalle venta:', error);
+        res.redirect('/ventas');
+    }
+};
+
 exports.mostrarEditar = async (req, res) => {
     try {
         const venta = await Venta.findById(req.params.id).lean();
@@ -164,10 +186,11 @@ exports.actualizar = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        res.redirect('/ventas');
+        // ✅ Redirigir al detalle con mensaje de éxito
+        res.redirect(`/ventas/detalle/${req.params.id}?ok=1`);
     } catch (error) {
         console.error('Error actualizar venta:', error);
-        res.redirect('/ventas');
+        res.redirect(`/ventas/detalle/${req.params.id}?err=1`);
     }
 };
 
@@ -265,30 +288,21 @@ exports.listarAPI = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────
-// API — POST /api/v1/ventas
-// Soporta dos modos:
-//   1. Multi-producto: body incluye items[] → nuevo flujo app
-//   2. Legacy:         body incluye producto/precioUnitario/cantidad
-// ─────────────────────────────────────────────────────────────
-
 exports.guardarAPI = async (req, res) => {
     const {
         zona, entidad, piso, cliente,
-        items,                          // nuevo: array de productos
-        producto, precioUnitario, cantidad, // legacy
+        items,
+        producto, precioUnitario, cantidad,
         tipoTransaccion, estadoEntrega,
         clientTempId
     } = req.body;
 
-    // ── Validaciones comunes ──────────────────────────────────
     const erroresComun = [];
     if (!zona || !zonasValidas.includes(zona))   erroresComun.push('Zona inválida.');
     if (!cliente || cliente.trim().length < 2)   erroresComun.push('Nombre de cliente requerido.');
     if (erroresComun.length > 0)
         return res.status(400).json({ success: false, errors: erroresComun });
 
-    // ── Deduplicación ─────────────────────────────────────────
     if (clientTempId) {
         const existente = await Venta.findOne({ clientTempId });
         if (existente) {
@@ -302,13 +316,11 @@ exports.guardarAPI = async (req, res) => {
     }
 
     try {
-        // ── MODO MULTI-PRODUCTO ───────────────────────────────
         if (Array.isArray(items) && items.length > 0) {
             const erroresItems = validarItems(items);
             if (erroresItems.length > 0)
                 return res.status(400).json({ success: false, errors: erroresItems });
 
-            // Normaliza cada ítem
             const itemsNorm = items.map(it => ({
                 nombre:    String(it.nombre).trim(),
                 cantidad:  parseInt(it.cantidad, 10),
@@ -317,34 +329,29 @@ exports.guardarAPI = async (req, res) => {
             }));
 
             const totalGeneral = itemsNorm.reduce((s, it) => s + it.subtotal, 0);
-
-            // Para compatibilidad con la web usamos el primer ítem como campo legacy
-            const primerItem = itemsNorm[0];
+            const primerItem   = itemsNorm[0];
 
             const nueva = await new Venta({
                 zona,
-                ubicacion:           { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                cliente:             cliente.trim(),
-                // legacy (se rellena con el primer ítem)
-                producto:            primerItem.nombre,
-                precioUnitario:      primerItem.precio,
-                cantidad:            primerItem.cantidad,
-                total:               totalGeneral,
-                // array completo de ítems
-                items:               itemsNorm,
-                tipoTransaccion:     tipoTransaccion || 'venta',
-                estadoEntrega:       estadoEntrega   || 'Inmediata',
-                estadoPago:          'pendiente',
-                totalPagado:         0,
-                cobros:              [],
-                clientTempId:        clientTempId || null,
+                ubicacion:            { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+                cliente:              cliente.trim(),
+                producto:             primerItem.nombre,
+                precioUnitario:       primerItem.precio,
+                cantidad:             primerItem.cantidad,
+                total:                totalGeneral,
+                items:                itemsNorm,
+                tipoTransaccion:      tipoTransaccion || 'venta',
+                estadoEntrega:        estadoEntrega   || 'Inmediata',
+                estadoPago:           'pendiente',
+                totalPagado:          0,
+                cobros:               [],
+                clientTempId:         clientTempId || null,
                 creadoPorDispositivo: req.headers['x-device-id'] || null
             }).save();
 
             return res.status(201).json({ success: true, data: nueva });
         }
 
-        // ── MODO LEGACY (un solo producto) ────────────────────
         const erroresLegacy = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
         if (erroresLegacy.length > 0)
             return res.status(400).json({ success: false, errors: erroresLegacy });
@@ -354,18 +361,18 @@ exports.guardarAPI = async (req, res) => {
 
         const nueva = await new Venta({
             zona,
-            ubicacion:           { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-            cliente:             cliente.trim(),
-            producto:            producto.trim(),
-            precioUnitario:      precio,
-            cantidad:            cantidadNum,
-            total:               precio * cantidadNum,
-            tipoTransaccion:     tipoTransaccion || 'venta',
-            estadoEntrega:       estadoEntrega   || 'Inmediata',
-            estadoPago:          'pendiente',
-            totalPagado:         0,
-            cobros:              [],
-            clientTempId:        clientTempId || null,
+            ubicacion:            { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+            cliente:              cliente.trim(),
+            producto:             producto.trim(),
+            precioUnitario:       precio,
+            cantidad:             cantidadNum,
+            total:                precio * cantidadNum,
+            tipoTransaccion:      tipoTransaccion || 'venta',
+            estadoEntrega:        estadoEntrega   || 'Inmediata',
+            estadoPago:           'pendiente',
+            totalPagado:          0,
+            cobros:               [],
+            clientTempId:         clientTempId || null,
             creadoPorDispositivo: req.headers['x-device-id'] || null
         }).save();
 
@@ -429,11 +436,6 @@ exports.registrarCobroAPI = (req, res) => {
     return exports.registrarCobro(req, res);
 };
 
-// ─────────────────────────────────────────────────────────────
-// API — PATCH /api/v1/ventas/:id/items/:itemId/entrega
-// Body: { entregado: true|false }
-// ─────────────────────────────────────────────────────────────
-
 exports.actualizarEntregaItemAPI = async (req, res) => {
     const { id, itemId } = req.params;
     const { entregado }  = req.body;
@@ -452,7 +454,6 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
 
         item.entregado = entregado;
 
-        // Si todos los ítems están entregados → actualiza estadoEntrega
         const todosEntregados = venta.items.length > 0 && venta.items.every(it => it.entregado);
         if (todosEntregados) venta.estadoEntrega = 'Entregado';
         else if (venta.estadoEntrega === 'Entregado') venta.estadoEntrega = 'Pendiente';
