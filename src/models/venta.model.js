@@ -20,6 +20,14 @@ const itemSchema = new mongoose.Schema({
     entregado: { type: Boolean, default: false }
 }, { _id: true });
 
+// ── Historial de ediciones ───────────────────────────────────────────────────
+const historialEdicionSchema = new mongoose.Schema({
+    fecha:    { type: Date, default: Date.now },
+    usuario:  { type: String, default: 'app', trim: true },
+    motivo:   { type: String, default: '', trim: true },
+    anterior: { type: mongoose.Schema.Types.Mixed } // snapshot del estado previo
+}, { _id: false });
+
 const ventaSchema = new mongoose.Schema({
     zona: { type: String, required: true, enum: ['Norte', 'Centro', 'Sur'] },
 
@@ -50,6 +58,10 @@ const ventaSchema = new mongoose.Schema({
     // Si viene vacío → venta legacy de un solo producto
     // Si viene con ítems → venta multi-producto (app móvil)
     items: { type: [itemSchema], default: [] },
+
+    // ── Historial de ediciones (FIX 2) ───────────────────────────────────────
+    // Cada vez que se edita el pedido desde la app se agrega una entrada
+    historialEdiciones: { type: [historialEdicionSchema], default: [] },
 
     tipoTransaccion: {
         type:    String,
