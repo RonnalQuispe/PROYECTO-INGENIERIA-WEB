@@ -1,41 +1,34 @@
 // ============================================================
 // src/services/cartera.service.js
-// ✅ FIX: getDetalleCliente ahora incluye telefono, notas y activo
-//    haciendo lookup al modelo Cliente por nombre.
 // ============================================================
 
 const Venta   = require('../models/venta.model');
 const Cliente = require('../models/cliente.model');
+const mongoose = require('mongoose');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Resumen de cartera agrupado por cliente
 // ─────────────────────────────────────────────────────────────────────────────
-
-const mongoose = require('mongoose');
-
-// Resumen agrupado por clienteRef (ObjectId) — ya no por string de nombre
 exports.getResumenCartera = async (filtros = {}) => {
     const match = {};
     if (filtros.zona && filtros.zona !== '') match.zona = filtros.zona;
 
-    // Si filtran por nombre de cliente, resolvemos el ID primero
     if (filtros.clienteId && mongoose.Types.ObjectId.isValid(filtros.clienteId)) {
         match.clienteRef = new mongoose.Types.ObjectId(filtros.clienteId);
     } else if (filtros.cliente && filtros.cliente !== '') {
-        // Búsqueda legacy por nombre — solo para el buscador web
         const clienteDoc = await Cliente
             .findOne({ nombre: new RegExp(filtros.cliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') })
             .select('_id')
             .lean();
         if (clienteDoc) match.clienteRef = clienteDoc._id;
-        else return []; // No existe — devolver vacío sin scan completo
+        else return [];
     }
 
     const resultados = await Venta.aggregate([
         { $match: match },
         {
             $group: {
-                _id:            '$clienteRef',    // ← agrupar por ObjectId, no por string
+                _id:            '$clienteRef',
                 zona:           { $first: '$zona' },
                 totalFacturado: { $sum: '$total' },
                 totalPagado:    { $sum: '$totalPagado' },
@@ -45,18 +38,17 @@ exports.getResumenCartera = async (filtros = {}) => {
                 }
             }
         },
-        // Lookup para obtener nombre y teléfono del cliente
         {
             $lookup: {
                 from:         'clientes',
                 localField:   '_id',
                 foreignField: '_id',
                 as:           'clienteDoc',
-                // Pipeline para proyección mínima dentro del lookup
                 pipeline: [{ $project: { nombre: 1, zona: 1, telefono: 1 } }]
             }
         },
-        { $unwind: { path: '$clienteDoc', preserveNullAndEmpty: true } },
+        // FIX: preserveNullAndEmptyArrays (no preserveNullAndEmpty)
+        { $unwind: { path: '$clienteDoc', preserveNullAndEmptyArrays: true } },
         { $sort: { 'clienteDoc.nombre': 1 } }
     ]);
 
@@ -72,7 +64,9 @@ exports.getResumenCartera = async (filtros = {}) => {
         else                        { nivel = 'none'; nivelLabel = 'Sin pagos'; }
 
         return {
+            // FIX: la app móvil usa c.cliente para mostrar el nombre — incluir ambos campos
             clienteId:      c._id,
+            cliente:        c.clienteDoc?.nombre || '(sin nombre)',
             nombre:         c.clienteDoc?.nombre || '(sin nombre)',
             zona:           c.clienteDoc?.zona   || c.zona || '',
             telefono:       c.clienteDoc?.telefono || '',
@@ -88,29 +82,35 @@ exports.getResumenCartera = async (filtros = {}) => {
     });
 };
 
-// Detalle por clienteId (ObjectId) — reemplaza la búsqueda por nombre
-exports.getDetalleCliente = async (clienteId) => {
-    if (!mongoose.Types.ObjectId.isValid(clienteId))
-        throw new Error('clienteId inválido');
+// ─────────────────────────────────────────────────────────────────────────────
+// Detalle por clienteId (ObjectId) o por nombre (string) — app usa nombre
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getDetalleCliente = async (clienteIdOrNombre) => {
+    let clienteDoc;
 
-    const objectId = new mongoose.Types.ObjectId(clienteId);
-
-    // Proyección mínima en el cliente
-    const clienteDoc = await Cliente
-        .findById(objectId)
-        .select('nombre zona telefono notas activo')
-        .lean();
+    if (mongoose.Types.ObjectId.isValid(clienteIdOrNombre)) {
+        // Llamada con ObjectId (web, nuevo flujo)
+        clienteDoc = await Cliente
+            .findById(clienteIdOrNombre)
+            .select('nombre zona telefono notas activo')
+            .lean();
+    } else {
+        // FIX: llamada con nombre (app móvil — flujo legacy)
+        clienteDoc = await Cliente
+            .findOne({ nombre: new RegExp(`^${clienteIdOrNombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+            .select('nombre zona telefono notas activo')
+            .lean();
+    }
 
     if (!clienteDoc) throw new Error('Cliente no encontrado');
 
-    // Ventas por clienteRef — usa el índice { clienteRef: 1, fecha: -1 }
     const ventas = await Venta
-        .find({ clienteRef: objectId })
+        .find({ clienteRef: clienteDoc._id })
         .sort({ fecha: -1 })
         .lean();
 
-    const totalFacturado = ventas.reduce((s, v) => s + v.total,       0);
-    const totalPagado    = ventas.reduce((s, v) => s + v.totalPagado, 0);
+    const totalFacturado = ventas.reduce((s, v) => s + (v.total       ?? 0), 0);
+    const totalPagado    = ventas.reduce((s, v) => s + (v.totalPagado ?? 0), 0);
     const saldoPendiente = Math.max(0, totalFacturado - totalPagado);
     const pctPagado      = totalFacturado > 0
         ? Math.round((totalPagado / totalFacturado) * 100) : 0;
@@ -120,14 +120,14 @@ exports.getDetalleCliente = async (clienteId) => {
         fecha:           v.fecha,
         producto:        v.producto,
         cantidad:        v.cantidad,
-        total:           v.total,
-        pagado:          v.totalPagado,
-        saldo:           Math.max(0, v.total - v.totalPagado),
+        total:           v.total           ?? 0,
+        pagado:          v.totalPagado     ?? 0,
+        saldo:           Math.max(0, (v.total ?? 0) - (v.totalPagado ?? 0)),
         estadoPago:      v.estadoPago,
         estadoEntrega:   v.estadoEntrega,
         tipoTransaccion: v.tipoTransaccion,
-        items:           v.items    || [],
-        cobros:          v.cobros   || [],
+        items:           v.items               || [],
+        cobros:          v.cobros              || [],
         historialEdiciones: v.historialEdiciones || [],
         ubicacion:       v.ubicacion,
     }));
@@ -147,8 +147,9 @@ exports.getDetalleCliente = async (clienteId) => {
         ventas:         ventasFormateadas,
     };
 };
+
 // ─────────────────────────────────────────────────────────────────────────────
-// editarVenta — sin cambios
+// editarVenta
 // ─────────────────────────────────────────────────────────────────────────────
 exports.editarVenta = async (ventaId, datos, usuario = 'app') => {
     const venta = await Venta.findById(ventaId);
