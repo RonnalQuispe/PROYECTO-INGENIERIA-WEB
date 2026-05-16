@@ -10,18 +10,32 @@ const Cliente = require('../models/cliente.model');
 // ─────────────────────────────────────────────────────────────────────────────
 // Resumen de cartera agrupado por cliente
 // ─────────────────────────────────────────────────────────────────────────────
+
+const mongoose = require('mongoose');
+
+// Resumen agrupado por clienteRef (ObjectId) — ya no por string de nombre
 exports.getResumenCartera = async (filtros = {}) => {
     const match = {};
-    if (filtros.zona    && filtros.zona    !== '') match.zona    = filtros.zona;
-    if (filtros.cliente && filtros.cliente !== '') {
-        match.cliente = new RegExp(filtros.cliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    if (filtros.zona && filtros.zona !== '') match.zona = filtros.zona;
+
+    // Si filtran por nombre de cliente, resolvemos el ID primero
+    if (filtros.clienteId && mongoose.Types.ObjectId.isValid(filtros.clienteId)) {
+        match.clienteRef = new mongoose.Types.ObjectId(filtros.clienteId);
+    } else if (filtros.cliente && filtros.cliente !== '') {
+        // Búsqueda legacy por nombre — solo para el buscador web
+        const clienteDoc = await Cliente
+            .findOne({ nombre: new RegExp(filtros.cliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') })
+            .select('_id')
+            .lean();
+        if (clienteDoc) match.clienteRef = clienteDoc._id;
+        else return []; // No existe — devolver vacío sin scan completo
     }
 
     const resultados = await Venta.aggregate([
         { $match: match },
         {
             $group: {
-                _id:            '$cliente',
+                _id:            '$clienteRef',    // ← agrupar por ObjectId, no por string
                 zona:           { $first: '$zona' },
                 totalFacturado: { $sum: '$total' },
                 totalPagado:    { $sum: '$totalPagado' },
@@ -31,24 +45,37 @@ exports.getResumenCartera = async (filtros = {}) => {
                 }
             }
         },
-        { $sort: { _id: 1 } }
+        // Lookup para obtener nombre y teléfono del cliente
+        {
+            $lookup: {
+                from:         'clientes',
+                localField:   '_id',
+                foreignField: '_id',
+                as:           'clienteDoc',
+                // Pipeline para proyección mínima dentro del lookup
+                pipeline: [{ $project: { nombre: 1, zona: 1, telefono: 1 } }]
+            }
+        },
+        { $unwind: { path: '$clienteDoc', preserveNullAndEmpty: true } },
+        { $sort: { 'clienteDoc.nombre': 1 } }
     ]);
 
     return resultados.map(c => {
         const saldoPendiente = Math.max(0, c.totalFacturado - c.totalPagado);
         const pctPagado      = c.totalFacturado > 0
-            ? Math.round((c.totalPagado / c.totalFacturado) * 100)
-            : 0;
+            ? Math.round((c.totalPagado / c.totalFacturado) * 100) : 0;
 
         let nivel, nivelLabel;
-        if (saldoPendiente <= 0)         { nivel = 'ok';   nivelLabel = 'Al día';    }
-        else if (pctPagado >= 60)        { nivel = 'med';  nivelLabel = 'Parcial';   }
-        else if (c.totalPagado > 0)      { nivel = 'low';  nivelLabel = 'En deuda';  }
-        else                             { nivel = 'none'; nivelLabel = 'Sin pagos'; }
+        if (saldoPendiente <= 0)    { nivel = 'ok';   nivelLabel = 'Al día';    }
+        else if (pctPagado >= 60)   { nivel = 'med';  nivelLabel = 'Parcial';   }
+        else if (c.totalPagado > 0) { nivel = 'low';  nivelLabel = 'En deuda';  }
+        else                        { nivel = 'none'; nivelLabel = 'Sin pagos'; }
 
         return {
-            _id:            c._id,
-            zona:           c.zona || '',
+            clienteId:      c._id,
+            nombre:         c.clienteDoc?.nombre || '(sin nombre)',
+            zona:           c.clienteDoc?.zona   || c.zona || '',
+            telefono:       c.clienteDoc?.telefono || '',
             totalFacturado: c.totalFacturado,
             totalPagado:    c.totalPagado,
             saldoPendiente,
@@ -61,18 +88,24 @@ exports.getResumenCartera = async (filtros = {}) => {
     });
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Detalle completo de un cliente (ventas + cobros + saldos)
-// ✅ FIX: ahora busca el registro en Cliente para incluir telefono, notas, activo
-// ─────────────────────────────────────────────────────────────────────────────
-exports.getDetalleCliente = async (nombreCliente) => {
-    // Buscar datos del cliente (teléfono, notas, etc.)
-    // La búsqueda es case-insensitive por si hay diferencias de mayúsculas
-    const clienteDoc = await Cliente.findOne({
-        nombre: new RegExp(`^${nombreCliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-    }).lean();
+// Detalle por clienteId (ObjectId) — reemplaza la búsqueda por nombre
+exports.getDetalleCliente = async (clienteId) => {
+    if (!mongoose.Types.ObjectId.isValid(clienteId))
+        throw new Error('clienteId inválido');
 
-    const ventas = await Venta.find({ cliente: nombreCliente })
+    const objectId = new mongoose.Types.ObjectId(clienteId);
+
+    // Proyección mínima en el cliente
+    const clienteDoc = await Cliente
+        .findById(objectId)
+        .select('nombre zona telefono notas activo')
+        .lean();
+
+    if (!clienteDoc) throw new Error('Cliente no encontrado');
+
+    // Ventas por clienteRef — usa el índice { clienteRef: 1, fecha: -1 }
+    const ventas = await Venta
+        .find({ clienteRef: objectId })
         .sort({ fecha: -1 })
         .lean();
 
@@ -80,37 +113,32 @@ exports.getDetalleCliente = async (nombreCliente) => {
     const totalPagado    = ventas.reduce((s, v) => s + v.totalPagado, 0);
     const saldoPendiente = Math.max(0, totalFacturado - totalPagado);
     const pctPagado      = totalFacturado > 0
-        ? Math.round((totalPagado / totalFacturado) * 100)
-        : 0;
-
-    // zona: preferir la del documento Cliente, si no la de la primera venta
-    const zona = clienteDoc?.zona || ventas[0]?.zona || '';
+        ? Math.round((totalPagado / totalFacturado) * 100) : 0;
 
     const ventasFormateadas = ventas.map(v => ({
-        _id:                v._id,
-        fecha:              v.fecha,
-        producto:           v.producto,
-        cantidad:           v.cantidad,
-        total:              v.total,
-        pagado:             v.totalPagado,
-        saldo:              Math.max(0, v.total - v.totalPagado),
-        estadoPago:         v.estadoPago,
-        estadoEntrega:      v.estadoEntrega,
-        tipoTransaccion:    v.tipoTransaccion,
-        items:              v.items || [],
-        cobros:             v.cobros || [],
+        _id:             v._id,
+        fecha:           v.fecha,
+        producto:        v.producto,
+        cantidad:        v.cantidad,
+        total:           v.total,
+        pagado:          v.totalPagado,
+        saldo:           Math.max(0, v.total - v.totalPagado),
+        estadoPago:      v.estadoPago,
+        estadoEntrega:   v.estadoEntrega,
+        tipoTransaccion: v.tipoTransaccion,
+        items:           v.items    || [],
+        cobros:          v.cobros   || [],
         historialEdiciones: v.historialEdiciones || [],
-        ubicacion:          v.ubicacion,
+        ubicacion:       v.ubicacion,
     }));
 
     return {
-        cliente:        nombreCliente,
-        zona,
-        // ✅ Campos del modelo Cliente ahora incluidos:
-        telefono:       clienteDoc?.telefono || '',
-        notas:          clienteDoc?.notas    || '',
-        clienteId:      clienteDoc?._id      || null,
-        // ─────────────────────────────────────────
+        clienteId:      clienteDoc._id,
+        cliente:        clienteDoc.nombre,
+        zona:           clienteDoc.zona,
+        telefono:       clienteDoc.telefono,
+        notas:          clienteDoc.notas,
+        activo:         clienteDoc.activo,
         totalFacturado,
         totalPagado,
         saldoPendiente,
@@ -119,7 +147,6 @@ exports.getDetalleCliente = async (nombreCliente) => {
         ventas:         ventasFormateadas,
     };
 };
-
 // ─────────────────────────────────────────────────────────────────────────────
 // editarVenta — sin cambios
 // ─────────────────────────────────────────────────────────────────────────────

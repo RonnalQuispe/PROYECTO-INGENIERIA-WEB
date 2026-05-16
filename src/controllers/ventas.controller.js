@@ -1,26 +1,56 @@
 // ============================================================
 // src/controllers/ventas.controller.js
-// FIX: guardarAPI resuelve el cliente por clienteId antes de
-//      crear la venta, evitando duplicados cuando se edita el nombre.
+// REESCRITO: relación cliente gestionada exclusivamente por _id
+// - guardarAPI y actualizarAPI exigen clienteId válido
+// - NUNCA se crea un cliente nuevo desde este controller
+// - NUNCA se busca por nombre si viene un clienteId
 // ============================================================
 
-const Venta   = require('../models/venta.model');
-const Cliente = require('../models/cliente.model');
+const Venta    = require('../models/venta.model');
+const Cliente  = require('../models/cliente.model');
+const mongoose = require('mongoose');
 
 const zonasValidas = ['Norte', 'Centro', 'Sur'];
+const escapeRegex  = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER PRIVADO: verificarCliente
+// Valida el formato del ObjectId, busca en BD con proyección mínima y lean().
+// NO modifica nada. NO crea nada.
+// Retorna: { ok: true, cliente } | { ok: false, error: string }
+// ─────────────────────────────────────────────────────────────────────────────
+const verificarCliente = async (clienteId) => {
+    if (!clienteId || !mongoose.Types.ObjectId.isValid(clienteId))
+        return { ok: false, error: 'clienteId inválido o ausente. Selecciona un cliente de la lista.' };
 
+    // findById usa el índice _id automático — O(log n) a cualquier escala.
+    // Proyección mínima: solo los campos que necesitamos para construir la venta.
+    // lean() devuelve un POJO en lugar de un documento Mongoose — más rápido y
+    // menos memoria RAM en el servidor.
+    const cliente = await Cliente
+        .findById(clienteId)
+        .select('nombre zona telefono activo')
+        .lean();
+
+    if (!cliente)        return { ok: false, error: 'El cliente seleccionado no existe.' };
+    if (!cliente.activo) return { ok: false, error: 'El cliente seleccionado está inactivo.' };
+
+    return { ok: true, cliente };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validaciones
+// ─────────────────────────────────────────────────────────────────────────────
 const validarVenta = ({ zona, cliente, producto, precioUnitario, cantidad }) => {
-    const errores = [];
+    const errores     = [];
     const precio      = Number(precioUnitario);
     const cantidadNum = parseInt(cantidad, 10);
 
-    if (!zona || !zonasValidas.includes(zona))        errores.push('Zona inválida.');
-    if (!cliente  || cliente.trim().length  < 2)      errores.push('Nombre de cliente requerido.');
-    if (!producto || producto.trim().length < 2)      errores.push('Producto requerido.');
-    if (isNaN(precio)      || precio      <= 0)       errores.push('Precio debe ser mayor a 0.');
-    if (isNaN(cantidadNum) || cantidadNum <  1)       errores.push('Cantidad mínima es 1.');
+    if (!zona || !zonasValidas.includes(zona))       errores.push('Zona inválida.');
+    if (!cliente  || cliente.trim().length  < 2)     errores.push('Nombre de cliente requerido.');
+    if (!producto || producto.trim().length < 2)     errores.push('Producto requerido.');
+    if (isNaN(precio)      || precio      <= 0)      errores.push('Precio debe ser mayor a 0.');
+    if (isNaN(cantidadNum) || cantidadNum <  1)      errores.push('Cantidad mínima es 1.');
 
     return errores;
 };
@@ -36,119 +66,15 @@ const validarItems = (items) => {
         const cantidad = parseInt(it.cantidad, 10);
         if (!it.nombre || String(it.nombre).trim().length < 1)
             errores.push(`Producto ${i + 1}: nombre requerido.`);
-        if (isNaN(precio) || precio <= 0)
-            errores.push(`Producto ${i + 1}: precio debe ser mayor a 0.`);
-        if (isNaN(cantidad) || cantidad < 1)
-            errores.push(`Producto ${i + 1}: cantidad mínima es 1.`);
+        if (isNaN(precio)   || precio   <= 0) errores.push(`Producto ${i + 1}: precio debe ser mayor a 0.`);
+        if (isNaN(cantidad) || cantidad <  1) errores.push(`Producto ${i + 1}: cantidad mínima es 1.`);
     });
     return errores;
 };
 
-// ─────────────────────────────────────────────────────────────
-// HELPER: Resolver cliente para la venta
-// ─────────────────────────────────────────────────────────────
-// Recibe { clienteId, cliente (nombre), clienteNombreOriginal, zona, telefono }
-// Retorna { clienteRef: ObjectId, nombreFinal: string }
-//
-// Prioridad:
-//   1. Si viene clienteId válido → buscar por _id (fuente de verdad)
-//      - Si el nombre cambió → actualizarlo en la colección Cliente
-//   2. Si no hay clienteId → buscar por nombre original, luego por nombre actual
-//   3. Si no existe → crear cliente nuevo
-// ─────────────────────────────────────────────────────────────
-const resolverCliente = async ({ clienteId, nombre, nombreOriginal, zona, telefono }) => {
-    const nombreTrimmed   = nombre?.trim()         || '';
-    const originalTrimmed = nombreOriginal?.trim() || nombreTrimmed;
-
-    // ── 1. Tenemos un ID real del cliente ────────────────────────────────────
-    if (clienteId && String(clienteId).length === 24) {
-        let clienteDoc = await Cliente.findById(clienteId);
-
-        if (clienteDoc) {
-            // Actualizar campos que hayan cambiado
-            const camposActualizar = {};
-            if (nombreTrimmed && nombreTrimmed !== clienteDoc.nombre)
-                camposActualizar.nombre = nombreTrimmed;
-            if (telefono && telefono !== clienteDoc.telefono)
-                camposActualizar.telefono = telefono;
-            if (zona && zona !== clienteDoc.zona)
-                camposActualizar.zona = zona;
-
-            if (Object.keys(camposActualizar).length > 0) {
-                // Verificar que el nombre nuevo no colisione con otro cliente
-                if (camposActualizar.nombre) {
-                    const conflicto = await Cliente.findOne({
-                        nombre: camposActualizar.nombre,
-                        _id:    { $ne: clienteId }
-                    });
-                    if (conflicto) {
-                        // El nombre ya existe en otro cliente — no renombrar,
-                        // usar el nombre que ya tiene en BD
-                        delete camposActualizar.nombre;
-                    }
-                }
-                if (Object.keys(camposActualizar).length > 0) {
-                    clienteDoc = await Cliente.findByIdAndUpdate(
-                        clienteId,
-                        { $set: camposActualizar },
-                        { new: true, runValidators: true }
-                    );
-                }
-            }
-
-            return {
-                clienteRef:  clienteDoc._id,
-                nombreFinal: clienteDoc.nombre   // nombre definitivo en BD
-            };
-        }
-        // Si findById no encontró nada (ID inválido o borrado), caer al flujo 2
-    }
-
-    // ── 2. Sin ID — buscar por nombre original, luego por nombre actual ───────
-    let clienteDoc = null;
-
-    if (originalTrimmed) {
-        clienteDoc = await Cliente.findOne({ nombre: originalTrimmed });
-    }
-    if (!clienteDoc && nombreTrimmed && nombreTrimmed !== originalTrimmed) {
-        clienteDoc = await Cliente.findOne({ nombre: nombreTrimmed });
-    }
-
-    if (clienteDoc) {
-        // Actualizar si el nombre cambió
-        const camposActualizar = {};
-        if (nombreTrimmed && nombreTrimmed !== clienteDoc.nombre) {
-            const conflicto = await Cliente.findOne({
-                nombre: nombreTrimmed,
-                _id:    { $ne: clienteDoc._id }
-            });
-            if (!conflicto) camposActualizar.nombre = nombreTrimmed;
-        }
-        if (telefono && telefono !== clienteDoc.telefono) camposActualizar.telefono = telefono;
-        if (zona     && zona     !== clienteDoc.zona)     camposActualizar.zona     = zona;
-
-        if (Object.keys(camposActualizar).length > 0) {
-            clienteDoc = await Cliente.findByIdAndUpdate(
-                clienteDoc._id,
-                { $set: camposActualizar },
-                { new: true, runValidators: true }
-            );
-        }
-        return { clienteRef: clienteDoc._id, nombreFinal: clienteDoc.nombre };
-    }
-
-    // ── 3. No existe — crear cliente nuevo ───────────────────────────────────
-    const nuevoCliente = await Cliente.create({
-        nombre:   nombreTrimmed,
-        zona:     zona     || '',
-        telefono: telefono || '',
-    });
-    return { clienteRef: nuevoCliente._id, nombreFinal: nuevoCliente.nombre };
-};
-
-// ─────────────────────────────────────────────────────────────
-// WEB
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// WEB (vistas Pug/EJS — sin cambios funcionales respecto al original)
+// ─────────────────────────────────────────────────────────────────────────────
 
 exports.listar = async (req, res) => {
     const { zona, cliente, estadoPago, pagina = 1 } = req.query;
@@ -194,10 +120,7 @@ exports.guardar = async (req, res) => {
     const errores = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
 
     if (errores.length > 0) {
-        return res.render('ventas/crear', {
-            usuario: req.session.usuario,
-            error: errores.join(' ')
-        });
+        return res.render('ventas/crear', { usuario: req.session.usuario, error: errores.join(' ') });
     }
 
     try {
@@ -351,9 +274,9 @@ exports.registrarCobro = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // API
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 exports.listarAPI = async (req, res) => {
     const { zona, cliente, estadoPago, pagina = 1 } = req.query;
@@ -389,167 +312,198 @@ exports.listarAPI = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIX PRINCIPAL: guardarAPI
-// Antes: guardaba cliente: cliente.trim() sin verificar si el ID existe.
-// Ahora: llama a resolverCliente() que:
-//   1. Busca por clienteId (fuente de verdad)
-//   2. Si el nombre cambió, lo actualiza en la colección Cliente
-//   3. Asocia clienteRef (ObjectId real) a la venta
-//   4. Guarda cliente (nombre) como string de display (campo legacy)
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// guardarAPI — POST /api/v1/ventas
+//
+// CONTRATO DEL FRONTEND (obligatorio):
+//   { clienteId: "<ObjectId>", zona, items: [...] | producto+precioUnitario+cantidad }
+//
+// REGLAS ESTRICTAS:
+//   1. clienteId DEBE venir siempre y ser un ObjectId válido en la colección Cliente.
+//   2. Si clienteId no es válido o no existe → 400, sin crear nada.
+//   3. NUNCA se crea un cliente nuevo aquí. Para eso existe POST /api/v1/clientes.
+//   4. El campo "cliente" (display) se toma de la BD, no del frontend.
+// ═════════════════════════════════════════════════════════════════════════════
 exports.guardarAPI = async (req, res) => {
     const {
         zona, entidad, piso,
-        cliente,                    // nombre actual (puede estar editado)
-        clienteId,                  // _id del cliente seleccionado (FIX)
-        clienteNombreOriginal,      // nombre con que está en BD (FIX)
-        telefono,
-        items,
-        producto, precioUnitario, cantidad,
+        clienteId,           // ← ÚNICO campo de identificación de cliente aceptado
+        items,               // array multi-producto (opcional)
+        producto, precioUnitario, cantidad,  // campos legacy un solo producto
         tipoTransaccion, estadoEntrega,
         clientTempId
     } = req.body;
 
-    // ── Validaciones básicas ─────────────────────────────────────────────────
-    const erroresComun = [];
-    if (!zona || !zonasValidas.includes(zona))  erroresComun.push('Zona inválida.');
-    if (!cliente || cliente.trim().length < 2)  erroresComun.push('Nombre de cliente requerido.');
-    if (erroresComun.length > 0)
-        return res.status(400).json({ success: false, errors: erroresComun });
+    // ── 1. Validar zona ───────────────────────────────────────────────────────
+    if (!zona || !zonasValidas.includes(zona))
+        return res.status(400).json({ success: false, errors: ['Zona inválida.'] });
 
-    // ── Idempotencia: evitar duplicado por reenvío offline ───────────────────
+    // ── 2. Idempotencia offline — antes de cualquier consulta pesada ──────────
     if (clientTempId) {
-        const existente = await Venta.findOne({ clientTempId });
-        if (existente) {
+        const existente = await Venta.findOne({ clientTempId }).lean();
+        if (existente)
             return res.status(200).json({
                 success:   true,
                 data:      existente,
                 duplicado: true,
                 message:   'Registro ya sincronizado anteriormente.'
             });
-        }
     }
 
-    try {
-        // ── FIX: Resolver cliente (buscar/actualizar/crear) ──────────────────
-        const { clienteRef, nombreFinal } = await resolverCliente({
-            clienteId,
-            nombre:         cliente,
-            nombreOriginal: clienteNombreOriginal,
-            zona,
-            telefono,
-        });
-        // ─────────────────────────────────────────────────────────────────────
+    // ── 3. Verificar cliente por ID — ÚNICA fuente de verdad ─────────────────
+    // verificarCliente: findById + proyección mínima + lean()
+    // Usa el índice _id automático de MongoDB. Instantáneo a cualquier volumen.
+    const { ok, cliente, error } = await verificarCliente(clienteId);
+    if (!ok) return res.status(400).json({ success: false, errors: [error] });
 
-        // ── Multi-producto ───────────────────────────────────────────────────
+    try {
+        // ── 4a. Multi-producto ────────────────────────────────────────────────
         if (Array.isArray(items) && items.length > 0) {
             const erroresItems = validarItems(items);
             if (erroresItems.length > 0)
                 return res.status(400).json({ success: false, errors: erroresItems });
 
             const itemsNorm = items.map(it => ({
-                nombre:    String(it.nombre).trim(),
-                cantidad:  parseInt(it.cantidad, 10),
-                precio:    Number(it.precio),
-                subtotal:  Number(it.precio) * parseInt(it.cantidad, 10),
+                nombre:   String(it.nombre).trim(),
+                cantidad: parseInt(it.cantidad, 10),
+                precio:   Number(it.precio),
+                subtotal: Number(it.precio) * parseInt(it.cantidad, 10),
             }));
 
             const totalGeneral = itemsNorm.reduce((s, it) => s + it.subtotal, 0);
             const primerItem   = itemsNorm[0];
 
-            const nueva = await new Venta({
+            const nueva = await Venta.create({
                 zona,
-                ubicacion:            { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                clienteRef,                     // FIX: ObjectId del cliente real
-                cliente:              nombreFinal, // FIX: nombre sincronizado con BD
-                producto:             primerItem.nombre,
-                precioUnitario:       primerItem.precio,
-                cantidad:             primerItem.cantidad,
-                total:                totalGeneral,
-                items:                itemsNorm,
-                tipoTransaccion:      tipoTransaccion || 'venta',
-                estadoEntrega:        estadoEntrega   || 'Inmediata',
-                estadoPago:           'pendiente',
-                totalPagado:          0,
-                cobros:               [],
-                clientTempId:         clientTempId || null,
+                ubicacion:    { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+                clienteRef:   cliente._id,     // ObjectId real — fuente de verdad
+                cliente:      cliente.nombre,  // campo display sincronizado con BD
+                producto:     primerItem.nombre,
+                precioUnitario: primerItem.precio,
+                cantidad:     primerItem.cantidad,
+                total:        totalGeneral,
+                items:        itemsNorm,
+                tipoTransaccion:  tipoTransaccion || 'venta',
+                estadoEntrega:    estadoEntrega   || 'Inmediata',
+                estadoPago:       'pendiente',
+                totalPagado:      0,
+                cobros:           [],
+                clientTempId:     clientTempId || null,
                 creadoPorDispositivo: req.headers['x-device-id'] || null
-            }).save();
+            });
 
             return res.status(201).json({ success: true, data: nueva });
         }
 
-        // ── Venta legacy (un solo producto) ──────────────────────────────────
-        const erroresLegacy = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
+        // ── 4b. Venta legacy (un solo producto) ───────────────────────────────
+        // Validamos con el nombre de BD para no depender del nombre que venga del frontend
+        const erroresLegacy = validarVenta({
+            zona,
+            cliente: cliente.nombre,
+            producto,
+            precioUnitario,
+            cantidad
+        });
         if (erroresLegacy.length > 0)
             return res.status(400).json({ success: false, errors: erroresLegacy });
 
         const precio      = Number(precioUnitario);
         const cantidadNum = parseInt(cantidad, 10);
 
-        const nueva = await new Venta({
+        const nueva = await Venta.create({
             zona,
-            ubicacion:            { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-            clienteRef,                     // FIX
-            cliente:              nombreFinal, // FIX
-            producto:             producto.trim(),
-            precioUnitario:       precio,
-            cantidad:             cantidadNum,
-            total:                precio * cantidadNum,
-            tipoTransaccion:      tipoTransaccion || 'venta',
-            estadoEntrega:        estadoEntrega   || 'Inmediata',
-            estadoPago:           'pendiente',
-            totalPagado:          0,
-            cobros:               [],
-            clientTempId:         clientTempId || null,
+            ubicacion:    { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+            clienteRef:   cliente._id,     // ObjectId real
+            cliente:      cliente.nombre,  // display desde BD
+            producto:     producto.trim(),
+            precioUnitario: precio,
+            cantidad:     cantidadNum,
+            total:        precio * cantidadNum,
+            tipoTransaccion:  tipoTransaccion || 'venta',
+            estadoEntrega:    estadoEntrega   || 'Inmediata',
+            estadoPago:       'pendiente',
+            totalPagado:      0,
+            cobros:           [],
+            clientTempId:     clientTempId || null,
             creadoPorDispositivo: req.headers['x-device-id'] || null
-        }).save();
+        });
 
         return res.status(201).json({ success: true, data: nueva });
 
     } catch (error) {
         console.error('Error guardarAPI:', error);
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// actualizarAPI — PUT /api/v1/ventas/:id
+//
+// Si el cliente cambia → enviar el nuevo clienteId en el body.
+// Si el cliente NO cambia → omitir clienteId (se conserva el existente).
+// NUNCA se actualiza el cliente buscando por nombre.
+// ═════════════════════════════════════════════════════════════════════════════
 exports.actualizarAPI = async (req, res) => {
-    const errores = validarVenta(req.body);
-    if (errores.length > 0) {
-        return res.status(400).json({ success: false, errors: errores });
-    }
+    const { zona, entidad, piso, clienteId, producto, precioUnitario, cantidad } = req.body;
 
-    const { zona, entidad, piso, cliente, producto, precioUnitario, cantidad } = req.body;
+    // Validaciones de campos de venta
+    const errores = [];
+    if (!zona || !zonasValidas.includes(zona))    errores.push('Zona inválida.');
+    if (!producto || producto.trim().length < 2)  errores.push('Producto requerido.');
+    const precio      = Number(precioUnitario);
+    const cantidadNum = parseInt(cantidad, 10);
+    if (isNaN(precio)      || precio      <= 0)   errores.push('Precio debe ser mayor a 0.');
+    if (isNaN(cantidadNum) || cantidadNum <  1)   errores.push('Cantidad mínima es 1.');
+    if (errores.length > 0)
+        return res.status(400).json({ success: false, errors: errores });
+
+    // Si viene clienteId → verificar antes de tocar la BD de ventas
+    let clienteData = null;
+    if (clienteId) {
+        const { ok, cliente, error } = await verificarCliente(clienteId);
+        if (!ok) return res.status(400).json({ success: false, errors: [error] });
+        clienteData = cliente;
+    }
 
     try {
-        const precio      = Number(precioUnitario);
-        const cantidadNum = parseInt(cantidad, 10);
+        // Construir update dinámicamente — solo los campos que cambian
+        const camposUpdate = {
+            zona,
+            ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+            producto:       producto.trim(),
+            precioUnitario: precio,
+            cantidad:       cantidadNum,
+            total:          precio * cantidadNum,
+        };
 
-        const actualizada = await Venta.findByIdAndUpdate(
-            req.params.id,
-            {
-                zona,
-                ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                cliente:        cliente.trim(),
-                producto:       producto.trim(),
-                precioUnitario: precio,
-                cantidad:       cantidadNum,
-                total:          precio * cantidadNum
-            },
-            { new: true, runValidators: true }
+        // Solo pisar clienteRef y cliente (display) si vino un nuevo clienteId validado
+        if (clienteData) {
+            camposUpdate.clienteRef = clienteData._id;
+            camposUpdate.cliente    = clienteData.nombre;
+        }
+
+        // updateOne es más eficiente que findByIdAndUpdate cuando no necesitamos
+        // devolver el documento completo: evita un round-trip extra a MongoDB.
+        const result = await Venta.updateOne(
+            { _id: req.params.id },
+            { $set: camposUpdate },
+            { runValidators: true }
         );
 
-        if (!actualizada)
+        if (result.matchedCount === 0)
             return res.status(404).json({ success: false, message: 'Venta no encontrada.' });
 
-        res.json({ success: true, data: actualizada });
+        return res.json({ success: true, message: 'Venta actualizada correctamente.' });
+
     } catch (error) {
         console.error('Error actualizarAPI:', error);
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// eliminarAPI — DELETE /api/v1/ventas/:id
+// ═════════════════════════════════════════════════════════════════════════════
 exports.eliminarAPI = async (req, res) => {
     try {
         const eliminada = await Venta.findByIdAndDelete(req.params.id);
@@ -562,10 +516,16 @@ exports.eliminarAPI = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// registrarCobroAPI — POST /api/v1/ventas/:id/cobros
+// ═════════════════════════════════════════════════════════════════════════════
 exports.registrarCobroAPI = (req, res) => {
     return exports.registrarCobro(req, res);
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// actualizarEntregaItemAPI — PATCH /api/v1/ventas/:id/items/:itemId/entrega
+// ═════════════════════════════════════════════════════════════════════════════
 exports.actualizarEntregaItemAPI = async (req, res) => {
     const { id, itemId } = req.params;
     const { entregado }  = req.body;
@@ -585,8 +545,8 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
         item.entregado = entregado;
 
         const todosEntregados = venta.items.length > 0 && venta.items.every(it => it.entregado);
-        if (todosEntregados) venta.estadoEntrega = 'Entregado';
-        else if (venta.estadoEntrega === 'Entregado') venta.estadoEntrega = 'Pendiente';
+        if (todosEntregados)                              venta.estadoEntrega = 'Entregado';
+        else if (venta.estadoEntrega === 'Entregado')     venta.estadoEntrega = 'Pendiente';
 
         await venta.save();
 
@@ -602,6 +562,11 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
     }
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// editarVentaAPI — PUT /api/v1/cartera/:ventaId/editar
+// Edita ítems/totales de una venta existente y guarda historial de cambios.
+// No cambia el cliente asociado (usar actualizarAPI para eso).
+// ═════════════════════════════════════════════════════════════════════════════
 exports.editarVentaAPI = async (req, res) => {
     const { producto, cantidad, items, total, motivo } = req.body;
     const usuario = req.session?.usuario || req.usuario || 'app';
@@ -611,7 +576,7 @@ exports.editarVentaAPI = async (req, res) => {
         if (!venta)
             return res.status(404).json({ success: false, message: 'Venta no encontrada.' });
 
-        // Snapshot del estado anterior para historial
+        // Snapshot para historial antes de modificar
         const anterior = {
             producto:       venta.producto,
             cantidad:       venta.cantidad,
@@ -622,6 +587,7 @@ exports.editarVentaAPI = async (req, res) => {
 
         if (producto) venta.producto = producto.trim();
         if (cantidad) venta.cantidad = parseFloat(cantidad);
+
         if (Array.isArray(items)) {
             venta.items = items
                 .filter(it => it.nombre?.trim())
@@ -634,12 +600,19 @@ exports.editarVentaAPI = async (req, res) => {
                     entregado: it.entregado || false,
                 }));
         }
+
         if (total !== undefined) venta.total = parseFloat(total);
 
-        venta.historialEdiciones.push({ fecha: new Date(), usuario, motivo: motivo || 'Edición', anterior });
+        venta.historialEdiciones.push({
+            fecha:    new Date(),
+            usuario,
+            motivo:   motivo || 'Edición',
+            anterior,
+        });
 
         await venta.save();
         res.json({ success: true, data: venta });
+
     } catch (error) {
         console.error('Error editarVentaAPI:', error);
         res.status(500).json({ success: false, message: error.message });
