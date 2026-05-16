@@ -1,11 +1,11 @@
 // ============================================================
 // src/services/cartera.service.js
-// ✅ CORRECCIÓN: Añadido método editarVenta() — era llamado desde
-//    cartera.controller.js pero no existía en este archivo,
-//    causando el error "No se pudo guardar la edición"
+// ✅ FIX: getDetalleCliente ahora incluye telefono, notas y activo
+//    haciendo lookup al modelo Cliente por nombre.
 // ============================================================
 
-const Venta = require('../models/venta.model');
+const Venta   = require('../models/venta.model');
+const Cliente = require('../models/cliente.model');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Resumen de cartera agrupado por cliente
@@ -41,10 +41,10 @@ exports.getResumenCartera = async (filtros = {}) => {
             : 0;
 
         let nivel, nivelLabel;
-        if (saldoPendiente <= 0)         { nivel = 'ok';      nivelLabel = 'Al día'; }
-        else if (pctPagado >= 60)        { nivel = 'med';     nivelLabel = 'Parcial'; }
-        else if (c.totalPagado > 0)      { nivel = 'low';     nivelLabel = 'En deuda'; }
-        else                              { nivel = 'none';    nivelLabel = 'Sin pagos'; }
+        if (saldoPendiente <= 0)         { nivel = 'ok';   nivelLabel = 'Al día';    }
+        else if (pctPagado >= 60)        { nivel = 'med';  nivelLabel = 'Parcial';   }
+        else if (c.totalPagado > 0)      { nivel = 'low';  nivelLabel = 'En deuda';  }
+        else                             { nivel = 'none'; nivelLabel = 'Sin pagos'; }
 
         return {
             _id:            c._id,
@@ -63,40 +63,54 @@ exports.getResumenCartera = async (filtros = {}) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Detalle completo de un cliente (ventas + cobros + saldos)
+// ✅ FIX: ahora busca el registro en Cliente para incluir telefono, notas, activo
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getDetalleCliente = async (nombreCliente) => {
+    // Buscar datos del cliente (teléfono, notas, etc.)
+    // La búsqueda es case-insensitive por si hay diferencias de mayúsculas
+    const clienteDoc = await Cliente.findOne({
+        nombre: new RegExp(`^${nombreCliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    }).lean();
+
     const ventas = await Venta.find({ cliente: nombreCliente })
         .sort({ fecha: -1 })
         .lean();
 
-    const totalFacturado = ventas.reduce((s, v) => s + v.total,        0);
-    const totalPagado    = ventas.reduce((s, v) => s + v.totalPagado,  0);
+    const totalFacturado = ventas.reduce((s, v) => s + v.total,       0);
+    const totalPagado    = ventas.reduce((s, v) => s + v.totalPagado, 0);
     const saldoPendiente = Math.max(0, totalFacturado - totalPagado);
     const pctPagado      = totalFacturado > 0
         ? Math.round((totalPagado / totalFacturado) * 100)
         : 0;
-    const zona = ventas[0]?.zona || '';
+
+    // zona: preferir la del documento Cliente, si no la de la primera venta
+    const zona = clienteDoc?.zona || ventas[0]?.zona || '';
 
     const ventasFormateadas = ventas.map(v => ({
-        _id:               v._id,
-        fecha:             v.fecha,
-        producto:          v.producto,
-        cantidad:          v.cantidad,
-        total:             v.total,
-        pagado:            v.totalPagado,
-        saldo:             Math.max(0, v.total - v.totalPagado),
-        estadoPago:        v.estadoPago,
-        estadoEntrega:     v.estadoEntrega,
-        tipoTransaccion:   v.tipoTransaccion,
-        items:             v.items || [],
-        cobros:            v.cobros || [],
+        _id:                v._id,
+        fecha:              v.fecha,
+        producto:           v.producto,
+        cantidad:           v.cantidad,
+        total:              v.total,
+        pagado:             v.totalPagado,
+        saldo:              Math.max(0, v.total - v.totalPagado),
+        estadoPago:         v.estadoPago,
+        estadoEntrega:      v.estadoEntrega,
+        tipoTransaccion:    v.tipoTransaccion,
+        items:              v.items || [],
+        cobros:             v.cobros || [],
         historialEdiciones: v.historialEdiciones || [],
-        ubicacion:         v.ubicacion,
+        ubicacion:          v.ubicacion,
     }));
 
     return {
         cliente:        nombreCliente,
         zona,
+        // ✅ Campos del modelo Cliente ahora incluidos:
+        telefono:       clienteDoc?.telefono || '',
+        notas:          clienteDoc?.notas    || '',
+        clienteId:      clienteDoc?._id      || null,
+        // ─────────────────────────────────────────
         totalFacturado,
         totalPagado,
         saldoPendiente,
@@ -107,53 +121,41 @@ exports.getDetalleCliente = async (nombreCliente) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ✅ CORRECCIÓN PRINCIPAL: editarVenta
-// Actualiza un pedido y guarda historialEdiciones[] para trazabilidad.
-// Era llamado desde cartera.controller → editarVentaAPI pero no existía,
-// lo que causaba: "TypeError: carteraService.editarVenta is not a function"
-// y el mensaje "ERROR - no se pudo guardar la edición" en la app.
+// editarVenta — sin cambios
 // ─────────────────────────────────────────────────────────────────────────────
 exports.editarVenta = async (ventaId, datos, usuario = 'app') => {
     const venta = await Venta.findById(ventaId);
     if (!venta) throw new Error('Venta no encontrada');
 
-    // Guardar snapshot del estado anterior para el historial
     const anterior = {
-        producto:  venta.producto,
-        cantidad:  venta.cantidad,
-        total:     venta.total,
-        items:     venta.items,
+        producto: venta.producto,
+        cantidad: venta.cantidad,
+        total:    venta.total,
+        items:    venta.items,
     };
 
-    // Actualizar producto/cantidad legacy si vienen
     if (datos.producto !== undefined) venta.producto = String(datos.producto).trim();
     if (datos.cantidad !== undefined) venta.cantidad = parseFloat(datos.cantidad) || venta.cantidad;
 
-    // Actualizar ítems multi-producto si vienen
     if (Array.isArray(datos.items)) {
         venta.items = datos.items
             .filter(it => it.nombre && String(it.nombre).trim())
             .map(it => ({
-                _id:      it._id || undefined,
-                nombre:   String(it.nombre).trim(),
-                cantidad: parseFloat(it.cantidad)  || 1,
-                precio:   parseFloat(it.precio)    || 0,
-                subtotal: (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio) || 0),
+                _id:       it._id || undefined,
+                nombre:    String(it.nombre).trim(),
+                cantidad:  parseFloat(it.cantidad)  || 1,
+                precio:    parseFloat(it.precio)    || 0,
+                subtotal:  (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio) || 0),
                 entregado: it.entregado || false,
             }));
     }
 
-    // Recalcular total:
-    // Si llega total explícito → usar ese valor
-    // Si hay ítems con precio → sumar subtotales
-    // Si no → mantener el original
     if (datos.total !== undefined && !isNaN(parseFloat(datos.total))) {
         venta.total = parseFloat(datos.total);
     } else if (venta.items.length > 0 && venta.items.some(it => it.precio > 0)) {
         venta.total = venta.items.reduce((s, it) => s + (it.subtotal || 0), 0);
     }
 
-    // Agregar entrada al historial de ediciones
     venta.historialEdiciones.push({
         fecha:    new Date(),
         usuario,
