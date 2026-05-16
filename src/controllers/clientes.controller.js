@@ -24,12 +24,32 @@ exports.crearCliente = async (req, res) => {
         const { nombre, zona, telefono, notas } = req.body;
         if (!nombre) return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
-        // Verificar si ya existe
         const existe = await Cliente.findOne({ nombre: nombre.trim() });
         if (existe) return res.json({ success: true, data: existe, yaExistia: true });
 
         const cliente = await Cliente.create({ nombre: nombre.trim(), zona, telefono, notas });
         res.status(201).json({ success: true, data: cliente });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+};
+
+// ── NUEVO ─────────────────────────────────────────────────────────────────────
+// PUT /api/v1/clientes/:id — actualiza telefono, zona y notas del cliente
+exports.actualizarCliente = async (req, res) => {
+    try {
+        const campos = {};
+        if (req.body.telefono !== undefined) campos.telefono = req.body.telefono;
+        if (req.body.zona     !== undefined) campos.zona     = req.body.zona;
+        if (req.body.notas    !== undefined) campos.notas    = req.body.notas;
+
+        const cliente = await Cliente.findByIdAndUpdate(
+            req.params.id,
+            { $set: campos },
+            { new: true, runValidators: true }
+        );
+        if (!cliente) return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
+        res.json({ success: true, data: cliente });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
