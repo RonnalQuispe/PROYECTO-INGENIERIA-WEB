@@ -1,9 +1,11 @@
 // ============================================================
 // src/controllers/ventas.controller.js
-// ✅ CORRECCIÓN: Añadido exports.mostrarDetalle para GET /ventas/detalle/:id
+// FIX: guardarAPI resuelve el cliente por clienteId antes de
+//      crear la venta, evitando duplicados cuando se edita el nombre.
 // ============================================================
 
-const Venta = require('../models/venta.model');
+const Venta   = require('../models/venta.model');
+const Cliente = require('../models/cliente.model');
 
 const zonasValidas = ['Norte', 'Centro', 'Sur'];
 
@@ -40,6 +42,108 @@ const validarItems = (items) => {
             errores.push(`Producto ${i + 1}: cantidad mínima es 1.`);
     });
     return errores;
+};
+
+// ─────────────────────────────────────────────────────────────
+// HELPER: Resolver cliente para la venta
+// ─────────────────────────────────────────────────────────────
+// Recibe { clienteId, cliente (nombre), clienteNombreOriginal, zona, telefono }
+// Retorna { clienteRef: ObjectId, nombreFinal: string }
+//
+// Prioridad:
+//   1. Si viene clienteId válido → buscar por _id (fuente de verdad)
+//      - Si el nombre cambió → actualizarlo en la colección Cliente
+//   2. Si no hay clienteId → buscar por nombre original, luego por nombre actual
+//   3. Si no existe → crear cliente nuevo
+// ─────────────────────────────────────────────────────────────
+const resolverCliente = async ({ clienteId, nombre, nombreOriginal, zona, telefono }) => {
+    const nombreTrimmed   = nombre?.trim()         || '';
+    const originalTrimmed = nombreOriginal?.trim() || nombreTrimmed;
+
+    // ── 1. Tenemos un ID real del cliente ────────────────────────────────────
+    if (clienteId && String(clienteId).length === 24) {
+        let clienteDoc = await Cliente.findById(clienteId);
+
+        if (clienteDoc) {
+            // Actualizar campos que hayan cambiado
+            const camposActualizar = {};
+            if (nombreTrimmed && nombreTrimmed !== clienteDoc.nombre)
+                camposActualizar.nombre = nombreTrimmed;
+            if (telefono && telefono !== clienteDoc.telefono)
+                camposActualizar.telefono = telefono;
+            if (zona && zona !== clienteDoc.zona)
+                camposActualizar.zona = zona;
+
+            if (Object.keys(camposActualizar).length > 0) {
+                // Verificar que el nombre nuevo no colisione con otro cliente
+                if (camposActualizar.nombre) {
+                    const conflicto = await Cliente.findOne({
+                        nombre: camposActualizar.nombre,
+                        _id:    { $ne: clienteId }
+                    });
+                    if (conflicto) {
+                        // El nombre ya existe en otro cliente — no renombrar,
+                        // usar el nombre que ya tiene en BD
+                        delete camposActualizar.nombre;
+                    }
+                }
+                if (Object.keys(camposActualizar).length > 0) {
+                    clienteDoc = await Cliente.findByIdAndUpdate(
+                        clienteId,
+                        { $set: camposActualizar },
+                        { new: true, runValidators: true }
+                    );
+                }
+            }
+
+            return {
+                clienteRef:  clienteDoc._id,
+                nombreFinal: clienteDoc.nombre   // nombre definitivo en BD
+            };
+        }
+        // Si findById no encontró nada (ID inválido o borrado), caer al flujo 2
+    }
+
+    // ── 2. Sin ID — buscar por nombre original, luego por nombre actual ───────
+    let clienteDoc = null;
+
+    if (originalTrimmed) {
+        clienteDoc = await Cliente.findOne({ nombre: originalTrimmed });
+    }
+    if (!clienteDoc && nombreTrimmed && nombreTrimmed !== originalTrimmed) {
+        clienteDoc = await Cliente.findOne({ nombre: nombreTrimmed });
+    }
+
+    if (clienteDoc) {
+        // Actualizar si el nombre cambió
+        const camposActualizar = {};
+        if (nombreTrimmed && nombreTrimmed !== clienteDoc.nombre) {
+            const conflicto = await Cliente.findOne({
+                nombre: nombreTrimmed,
+                _id:    { $ne: clienteDoc._id }
+            });
+            if (!conflicto) camposActualizar.nombre = nombreTrimmed;
+        }
+        if (telefono && telefono !== clienteDoc.telefono) camposActualizar.telefono = telefono;
+        if (zona     && zona     !== clienteDoc.zona)     camposActualizar.zona     = zona;
+
+        if (Object.keys(camposActualizar).length > 0) {
+            clienteDoc = await Cliente.findByIdAndUpdate(
+                clienteDoc._id,
+                { $set: camposActualizar },
+                { new: true, runValidators: true }
+            );
+        }
+        return { clienteRef: clienteDoc._id, nombreFinal: clienteDoc.nombre };
+    }
+
+    // ── 3. No existe — crear cliente nuevo ───────────────────────────────────
+    const nuevoCliente = await Cliente.create({
+        nombre:   nombreTrimmed,
+        zona:     zona     || '',
+        telefono: telefono || '',
+    });
+    return { clienteRef: nuevoCliente._id, nombreFinal: nuevoCliente.nombre };
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -123,13 +227,11 @@ exports.guardar = async (req, res) => {
     }
 };
 
-// ✅ NUEVO: Mostrar detalle completo de una venta (web)
 exports.mostrarDetalle = async (req, res) => {
     try {
         const venta = await Venta.findById(req.params.id).lean();
         if (!venta) return res.redirect('/ventas');
 
-        // Calcular saldo para la vista
         venta.saldo = Math.max(0, venta.total - (venta.totalPagado || 0));
 
         res.render('ventas/detalle', {
@@ -186,7 +288,6 @@ exports.actualizar = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        // ✅ Redirigir al detalle con mensaje de éxito
         res.redirect(`/ventas/detalle/${req.params.id}?ok=1`);
     } catch (error) {
         console.error('Error actualizar venta:', error);
@@ -288,21 +389,36 @@ exports.listarAPI = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX PRINCIPAL: guardarAPI
+// Antes: guardaba cliente: cliente.trim() sin verificar si el ID existe.
+// Ahora: llama a resolverCliente() que:
+//   1. Busca por clienteId (fuente de verdad)
+//   2. Si el nombre cambió, lo actualiza en la colección Cliente
+//   3. Asocia clienteRef (ObjectId real) a la venta
+//   4. Guarda cliente (nombre) como string de display (campo legacy)
+// ─────────────────────────────────────────────────────────────────────────────
 exports.guardarAPI = async (req, res) => {
     const {
-        zona, entidad, piso, cliente,
+        zona, entidad, piso,
+        cliente,                    // nombre actual (puede estar editado)
+        clienteId,                  // _id del cliente seleccionado (FIX)
+        clienteNombreOriginal,      // nombre con que está en BD (FIX)
+        telefono,
         items,
         producto, precioUnitario, cantidad,
         tipoTransaccion, estadoEntrega,
         clientTempId
     } = req.body;
 
+    // ── Validaciones básicas ─────────────────────────────────────────────────
     const erroresComun = [];
-    if (!zona || !zonasValidas.includes(zona))   erroresComun.push('Zona inválida.');
-    if (!cliente || cliente.trim().length < 2)   erroresComun.push('Nombre de cliente requerido.');
+    if (!zona || !zonasValidas.includes(zona))  erroresComun.push('Zona inválida.');
+    if (!cliente || cliente.trim().length < 2)  erroresComun.push('Nombre de cliente requerido.');
     if (erroresComun.length > 0)
         return res.status(400).json({ success: false, errors: erroresComun });
 
+    // ── Idempotencia: evitar duplicado por reenvío offline ───────────────────
     if (clientTempId) {
         const existente = await Venta.findOne({ clientTempId });
         if (existente) {
@@ -316,6 +432,17 @@ exports.guardarAPI = async (req, res) => {
     }
 
     try {
+        // ── FIX: Resolver cliente (buscar/actualizar/crear) ──────────────────
+        const { clienteRef, nombreFinal } = await resolverCliente({
+            clienteId,
+            nombre:         cliente,
+            nombreOriginal: clienteNombreOriginal,
+            zona,
+            telefono,
+        });
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── Multi-producto ───────────────────────────────────────────────────
         if (Array.isArray(items) && items.length > 0) {
             const erroresItems = validarItems(items);
             if (erroresItems.length > 0)
@@ -334,7 +461,8 @@ exports.guardarAPI = async (req, res) => {
             const nueva = await new Venta({
                 zona,
                 ubicacion:            { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                cliente:              cliente.trim(),
+                clienteRef,                     // FIX: ObjectId del cliente real
+                cliente:              nombreFinal, // FIX: nombre sincronizado con BD
                 producto:             primerItem.nombre,
                 precioUnitario:       primerItem.precio,
                 cantidad:             primerItem.cantidad,
@@ -352,6 +480,7 @@ exports.guardarAPI = async (req, res) => {
             return res.status(201).json({ success: true, data: nueva });
         }
 
+        // ── Venta legacy (un solo producto) ──────────────────────────────────
         const erroresLegacy = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
         if (erroresLegacy.length > 0)
             return res.status(400).json({ success: false, errors: erroresLegacy });
@@ -362,7 +491,8 @@ exports.guardarAPI = async (req, res) => {
         const nueva = await new Venta({
             zona,
             ubicacion:            { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-            cliente:              cliente.trim(),
+            clienteRef,                     // FIX
+            cliente:              nombreFinal, // FIX
             producto:             producto.trim(),
             precioUnitario:       precio,
             cantidad:             cantidadNum,
@@ -468,6 +598,50 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
         });
     } catch (error) {
         console.error('Error actualizarEntregaItemAPI:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.editarVentaAPI = async (req, res) => {
+    const { producto, cantidad, items, total, motivo } = req.body;
+    const usuario = req.session?.usuario || req.usuario || 'app';
+
+    try {
+        const venta = await Venta.findById(req.params.id);
+        if (!venta)
+            return res.status(404).json({ success: false, message: 'Venta no encontrada.' });
+
+        // Snapshot del estado anterior para historial
+        const anterior = {
+            producto:       venta.producto,
+            cantidad:       venta.cantidad,
+            precioUnitario: venta.precioUnitario,
+            total:          venta.total,
+            items:          venta.items.map(it => ({ ...it.toObject() })),
+        };
+
+        if (producto) venta.producto = producto.trim();
+        if (cantidad) venta.cantidad = parseFloat(cantidad);
+        if (Array.isArray(items)) {
+            venta.items = items
+                .filter(it => it.nombre?.trim())
+                .map(it => ({
+                    _id:       it._id || undefined,
+                    nombre:    String(it.nombre).trim(),
+                    cantidad:  parseFloat(it.cantidad) || 1,
+                    precio:    parseFloat(it.precio)   || 0,
+                    subtotal:  (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio) || 0),
+                    entregado: it.entregado || false,
+                }));
+        }
+        if (total !== undefined) venta.total = parseFloat(total);
+
+        venta.historialEdiciones.push({ fecha: new Date(), usuario, motivo: motivo || 'Edición', anterior });
+
+        await venta.save();
+        res.json({ success: true, data: venta });
+    } catch (error) {
+        console.error('Error editarVentaAPI:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
