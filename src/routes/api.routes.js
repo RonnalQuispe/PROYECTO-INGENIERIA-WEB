@@ -20,6 +20,7 @@ router.use(verifyJWT);
 // ── CLIENTES ──────────────────────────────────────────────────────────────────
 router.get('/clientes',                              clientesCtrl.buscarClientes);
 router.post('/clientes',                             clientesCtrl.crearCliente);
+router.put('/clientes/:id',                          clientesCtrl.actualizarCliente); // ← NUEVA
 
 // ── ENTIDADES ─────────────────────────────────────────────────────────────────
 router.get('/entidades',                             clientesCtrl.buscarEntidades);
@@ -36,8 +37,6 @@ router.patch('/ventas/:id/items/:itemId/entrega',    ventasCtrl.actualizarEntreg
 // ── CARTERA ───────────────────────────────────────────────────────────────────
 router.get('/cartera',                               carteraCtrl.listarAPI);
 router.get('/cartera/:cliente',                      carteraCtrl.detalleAPI);
-// ✅ CORRECCIÓN: Ruta para editar pedido desde la app móvil (estaba definida
-//    en el controller pero NUNCA registrada aquí — causa del error "no se pudo guardar")
 router.put('/cartera/:ventaId/editar',               carteraCtrl.editarVentaAPI);
 
 // ── REPORTES ──────────────────────────────────────────────────────────────────
