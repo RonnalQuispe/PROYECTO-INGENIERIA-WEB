@@ -1,5 +1,17 @@
-// src/models/venta.model.js
+// ============================================================
+// src/models/venta.model.js  —  OPTIMIZADO
+// ============================================================
+// CAMBIOS vs. original (solo la sección de índices):
+//   ① Conservados los 4 índices originales (estaban bien).
+//   ② AGREGADOS 3 índices nuevos:
+//      — { zona, estadoPago, fecha }  →  filtro combinado en listarAPI
+//      — { estadoEntrega, fecha }     →  pedidos pendientes / entregados
+//      — { clienteRef, estadoPago }   →  cartera pendiente por cliente
+// ============================================================
+
 const mongoose = require('mongoose');
+
+// ── Sub-schemas ───────────────────────────────────────────────────────────────
 
 const cobroSchema = new mongoose.Schema({
     monto:      { type: Number, required: true, min: 0 },
@@ -24,6 +36,8 @@ const historialEdicionSchema = new mongoose.Schema({
     anterior: { type: mongoose.Schema.Types.Mixed }
 }, { _id: false });
 
+// ── Schema principal ──────────────────────────────────────────────────────────
+
 const ventaSchema = new mongoose.Schema({
     zona: { type: String, required: true, enum: ['Norte', 'Centro', 'Sur'] },
 
@@ -32,12 +46,12 @@ const ventaSchema = new mongoose.Schema({
         piso:    { type: String, default: '' }
     },
 
-    // ── Relación por ID — OBLIGATORIA ────────────────────────────────────────
+    // ── Relación por ID — OBLIGATORIA ─────────────────────────────────────────
     // clienteRef es la única fuente de verdad. Nunca null en ventas nuevas.
     clienteRef: {
         type:     mongoose.Schema.Types.ObjectId,
         ref:      'Cliente',
-        required: true               // ← REQUERIDO (antes era default:null)
+        required: true
     },
 
     entidadRef: {
@@ -48,7 +62,7 @@ const ventaSchema = new mongoose.Schema({
 
     // ── Campo display (solo lectura, se obtiene del populate) ─────────────────
     // Se mantiene para compatibilidad con vistas web y búsquedas legacy,
-    // pero NUNCA se usa como fuente de verdad de identidad.
+    // NUNCA se usa como fuente de verdad de identidad.
     cliente: { type: String, required: true, trim: true },
 
     producto:       { type: String, required: true, trim: true },
@@ -77,25 +91,64 @@ const ventaSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// ── Índices para consultas frecuentes ────────────────────────────────────────
-// clienteRef: el JOIN más frecuente (cartera, historial por cliente)
+// ══════════════════════════════════════════════════════════════════════════════
+// ÍNDICES
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Índices originales (conservados) ──────────────────────────────────────────
+
+// ① clienteRef + fecha  →  el JOIN más frecuente de toda la app
+//    Cubre: Venta.find({ clienteRef: id }).sort({ fecha: -1 })
+//    Usado en: getDetalleCliente(), getResumenCartera(), historial por cliente.
 ventaSchema.index({ clienteRef: 1, fecha: -1 });
-// Filtros de lista principal
+
+// ② zona + fecha  →  lista principal filtrada por zona
+//    Cubre: Venta.find({ zona }).sort({ fecha: -1 })
 ventaSchema.index({ zona: 1, fecha: -1 });
+
+// ③ estadoPago + fecha  →  cartera global de deudas
+//    Cubre: Venta.find({ estadoPago: 'pendiente' }).sort({ fecha: -1 })
 ventaSchema.index({ estadoPago: 1, fecha: -1 });
-// Idempotencia offline
+
+// ④ clientTempId  →  idempotencia offline
+//    sparse: true evita que los documentos con clientTempId: null
+//    consuman espacio en el índice.
 ventaSchema.index({ clientTempId: 1 }, { sparse: true });
+
+// ── Índices nuevos ─────────────────────────────────────────────────────────────
+
+// ⑤ zona + estadoPago + fecha  →  filtro combinado de listarAPI
+//    Cubre: Venta.find({ zona, estadoPago }).sort({ fecha: -1 })
+//    Sin este índice, MongoDB hacía index intersection de ② y ③,
+//    que es menos eficiente que un IXSCAN directo sobre este compuesto.
+ventaSchema.index({ zona: 1, estadoPago: 1, fecha: -1 });
+
+// ⑥ estadoEntrega + fecha  →  pedidos pendientes / vista de entregas
+//    Cubre: Venta.find({ estadoEntrega: 'Pendiente' }).sort({ fecha: -1 })
+//    Sin este índice → COLLSCAN en cada carga de pedidos pendientes.
+ventaSchema.index({ estadoEntrega: 1, fecha: -1 });
+
+// ⑦ clienteRef + estadoPago  →  cartera pendiente por cliente específico
+//    Cubre: Venta.find({ clienteRef: id, estadoPago: { $ne: 'pagado' } })
+//    Usado en getResumenCartera() con filtro de cliente individual.
+//    El índice ① no es suficiente aquí porque su segundo campo es fecha,
+//    no estadoPago — MongoDB no puede usar ① para filtrar por estadoPago.
+ventaSchema.index({ clienteRef: 1, estadoPago: 1 });
+
+// ── Virtual ───────────────────────────────────────────────────────────────────
 
 ventaSchema.virtual('saldoPendiente').get(function () {
     return Math.max(0, this.total - this.totalPagado);
 });
 
+// ── Hook pre-save ─────────────────────────────────────────────────────────────
+
 ventaSchema.pre('save', function (next) {
-    if (this.totalPagado <= 0)            this.estadoPago = 'pendiente';
+    if (this.totalPagado <= 0)               this.estadoPago = 'pendiente';
     else if (this.totalPagado >= this.total) {
         this.totalPagado = this.total;
         this.estadoPago  = 'pagado';
-    } else                                this.estadoPago = 'parcial';
+    } else                                   this.estadoPago = 'parcial';
 
     if (this.tipoTransaccion === 'venta') this.estadoEntrega = 'Inmediata';
     next();

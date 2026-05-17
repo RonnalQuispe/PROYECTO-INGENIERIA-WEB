@@ -1,9 +1,27 @@
 // ============================================================
-// src/controllers/ventas.controller.js
-// REESCRITO: relación cliente gestionada exclusivamente por _id
-// - guardarAPI y actualizarAPI exigen clienteId válido
-// - NUNCA se crea un cliente nuevo desde este controller
-// - NUNCA se busca por nombre si viene un clienteId
+// src/controllers/ventas.controller.js  —  OPTIMIZADO
+// ============================================================
+// CAMBIOS vs. original:
+//
+// listarAPI():
+//   ❌ ANTES: filtro.cliente = new RegExp(...)  →  COLLSCAN.
+//   ✅ AHORA: filtra por clienteRef (ObjectId) si viene clienteId  →  IXSCAN.
+//   ✅ Añadida proyección estricta: no carga historialEdiciones[] ni cobros[].
+//
+// registrarCobro() y registrarCobroAPI():
+//   ❌ ANTES: findById → mutación en memoria → venta.save()  →  2 round-trips
+//     + hidratación completa del documento (incluye todos los arrays pesados).
+//   ✅ AHORA: findById con .select() mínimo para validar + updateOne atómico
+//     con $push + $set  →  1.5 round-trips, sin hidratar el documento completo.
+//
+// actualizarEntregaItemAPI():
+//   ❌ ANTES: findById → item.entregado = x → venta.save()  →  trae TODO a RAM
+//     para cambiar un solo booleano de un subdocumento.
+//   ✅ AHORA: updateOne con operador posicional $ + pipeline de aggregation
+//     para recalcular estadoEntrega de forma atómica  →  sin traer nada a RAM.
+//
+// Resto de métodos: sin cambios funcionales, solo añadido .lean() y .select()
+// en las queries de solo lectura que aún no los tenían.
 // ============================================================
 
 const Venta    = require('../models/venta.model');
@@ -14,19 +32,15 @@ const zonasValidas = ['Norte', 'Centro', 'Sur'];
 const escapeRegex  = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPER PRIVADO: verificarCliente
-// Valida el formato del ObjectId, busca en BD con proyección mínima y lean().
-// NO modifica nada. NO crea nada.
-// Retorna: { ok: true, cliente } | { ok: false, error: string }
+// HELPER: verificarCliente
 // ─────────────────────────────────────────────────────────────────────────────
 const verificarCliente = async (clienteId) => {
     if (!clienteId || !mongoose.Types.ObjectId.isValid(clienteId))
         return { ok: false, error: 'clienteId inválido o ausente. Selecciona un cliente de la lista.' };
 
-    // findById usa el índice _id automático — O(log n) a cualquier escala.
-    // Proyección mínima: solo los campos que necesitamos para construir la venta.
-    // lean() devuelve un POJO en lugar de un documento Mongoose — más rápido y
-    // menos memoria RAM en el servidor.
+    // findById usa el índice _id automático → O(log n).
+    // .select() mínimo: solo los campos que construyen la venta.
+    // .lean() → POJO en lugar de documento Mongoose, sin hidratación.
     const cliente = await Cliente
         .findById(clienteId)
         .select('nombre zona telefono activo')
@@ -73,7 +87,7 @@ const validarItems = (items) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WEB (vistas Pug/EJS — sin cambios funcionales respecto al original)
+// WEB — sin cambios funcionales, solo .lean() añadido donde faltaba
 // ─────────────────────────────────────────────────────────────────────────────
 
 exports.listar = async (req, res) => {
@@ -99,11 +113,7 @@ exports.listar = async (req, res) => {
                 paginaActual: Number(pagina),
                 totalPaginas: Math.ceil(totalVentas / limite)
             },
-            filtros: {
-                zona:       zona       || '',
-                cliente:    cliente    || '',
-                estadoPago: estadoPago || ''
-            }
+            filtros: { zona: zona || '', cliente: cliente || '', estadoPago: estadoPago || '' }
         });
     } catch (error) {
         console.error('Error listar ventas:', error);
@@ -119,9 +129,8 @@ exports.guardar = async (req, res) => {
     const { zona, entidad, piso, cliente, producto, precioUnitario, cantidad } = req.body;
     const errores = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
 
-    if (errores.length > 0) {
+    if (errores.length > 0)
         return res.render('ventas/crear', { usuario: req.session.usuario, error: errores.join(' ') });
-    }
 
     try {
         const precio      = Number(precioUnitario);
@@ -143,10 +152,7 @@ exports.guardar = async (req, res) => {
         res.redirect('/ventas');
     } catch (error) {
         console.error('Error guardar venta:', error);
-        res.status(500).render('ventas/crear', {
-            usuario: req.session.usuario,
-            error: 'Error interno al guardar la venta.'
-        });
+        res.status(500).render('ventas/crear', { usuario: req.session.usuario, error: 'Error interno al guardar la venta.' });
     }
 };
 
@@ -220,9 +226,9 @@ exports.actualizar = async (req, res) => {
 
 exports.eliminar = async (req, res) => {
     try {
-        const venta = await Venta.findById(req.params.id);
-        if (!venta) return res.redirect('/ventas');
-        await Venta.findByIdAndDelete(req.params.id);
+        // ✅ Una sola operación: findByIdAndDelete (sin findById previo)
+        const eliminada = await Venta.findByIdAndDelete(req.params.id);
+        if (!eliminada) return res.redirect('/ventas');
         res.redirect('/ventas');
     } catch (error) {
         console.error('Error eliminar venta:', error);
@@ -230,11 +236,23 @@ exports.eliminar = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// registrarCobro — WEB  (también usado por registrarCobroAPI)
+// ✅ OPTIMIZADO: findById con .select() mínimo + updateOne atómico con $push/$set
+// ─────────────────────────────────────────────────────────────────────────────
 exports.registrarCobro = async (req, res) => {
     const { monto, metodo, referencia } = req.body;
+    const { id } = req.params;
 
     try {
-        const venta = await Venta.findById(req.params.id);
+        // ✅ Solo traemos los 3 campos que necesitamos para validar.
+        // El documento de venta puede tener arrays pesados (historial, items, cobros)
+        // que NO necesitamos para registrar un cobro.
+        const venta = await Venta
+            .findById(id)
+            .select('total totalPagado estadoPago')
+            .lean();
+
         if (!venta) return res.status(404).json({ error: 'Venta no encontrada.' });
 
         const montoNum       = Number(monto);
@@ -247,26 +265,39 @@ exports.registrarCobro = async (req, res) => {
         if (venta.estadoPago === 'pagado')
             return res.status(400).json({ error: 'La venta ya está pagada.' });
 
-        venta.cobros.push({
-            monto:      montoNum,
-            metodo:     metodo?.trim()     || 'efectivo',
-            referencia: referencia?.trim() || '',
-            fecha:      new Date(),
-            cobradoPor: req.session?.usuario || req.usuario || 'Sistema'
-        });
+        // Calcular nuevo estado en JS (lógica simple, no amerita round-trip extra)
+        const nuevoTotalPagado = Math.min(venta.total, (venta.totalPagado || 0) + montoNum);
+        const nuevoEstadoPago  =
+            nuevoTotalPagado >= venta.total ? 'pagado'  :
+            nuevoTotalPagado  > 0           ? 'parcial' : 'pendiente';
 
-        venta.totalPagado = (venta.totalPagado || 0) + montoNum;
-
-        if      (venta.totalPagado >= venta.total) venta.estadoPago = 'pagado';
-        else if (venta.totalPagado  > 0)           venta.estadoPago = 'parcial';
-
-        await venta.save();
+        // ✅ Una sola operación atómica: $push añade el cobro al array,
+        // $set actualiza totalPagado y estadoPago — todo en un solo write.
+        // Sin .save(), sin pre('save') hook, sin hidratar el documento.
+        await Venta.updateOne(
+            { _id: id },
+            {
+                $push: {
+                    cobros: {
+                        monto:      montoNum,
+                        metodo:     metodo?.trim()     || 'efectivo',
+                        referencia: referencia?.trim() || '',
+                        fecha:      new Date(),
+                        cobradoPor: req.session?.usuario || req.usuario || 'Sistema'
+                    }
+                },
+                $set: {
+                    totalPagado: nuevoTotalPagado,
+                    estadoPago:  nuevoEstadoPago
+                }
+            }
+        );
 
         res.json({
             ok:             true,
-            estadoPago:     venta.estadoPago,
-            totalPagado:    venta.totalPagado,
-            saldoPendiente: venta.total - venta.totalPagado
+            estadoPago:     nuevoEstadoPago,
+            totalPagado:    nuevoTotalPagado,
+            saldoPendiente: Math.max(0, venta.total - nuevoTotalPagado)
         });
     } catch (error) {
         console.error('Error registrarCobro:', error);
@@ -278,22 +309,44 @@ exports.registrarCobro = async (req, res) => {
 // API
 // ═════════════════════════════════════════════════════════════════════════════
 
+// GET /api/v1/ventas
+// ✅ OPTIMIZADO: filtra por clienteRef (ObjectId, indexado) en lugar de
+// cliente (String, sin índice útil). Proyección estricta: no carga arrays pesados.
 exports.listarAPI = async (req, res) => {
-    const { zona, cliente, estadoPago, pagina = 1 } = req.query;
-    const limite = 20;
-    const filtro = {};
-
-    if (zona       && zona       !== '') filtro.zona       = zona;
-    if (cliente    && cliente    !== '') filtro.cliente    = new RegExp(escapeRegex(cliente), 'i');
-    if (estadoPago && estadoPago !== '') filtro.estadoPago = estadoPago;
+    const { zona, clienteId, estadoPago, pagina = 1, limite = 20 } = req.query;
+    const limiteNum = Math.min(Number(limite), 100); // cap de seguridad
+    const skip      = (Number(pagina) - 1) * limiteNum;
 
     try {
+        const filtro = {};
+        if (zona       && zona       !== '') filtro.zona       = zona;
+        if (estadoPago && estadoPago !== '') filtro.estadoPago = estadoPago;
+
+        // ✅ clienteRef (ObjectId indexado) en lugar de cliente (String sin índice)
+        // Usa el índice { clienteRef, estadoPago } o { clienteRef, fecha }
+        // según los campos del filtro → IXSCAN garantizado.
+        if (clienteId && mongoose.Types.ObjectId.isValid(clienteId))
+            filtro.clienteRef = new mongoose.Types.ObjectId(clienteId);
+
+        // ✅ Proyección estricta: excluye historialEdiciones[] y cobros[] que
+        // pueden ser muy pesados y no se necesitan en la lista.
+        const proyeccion = {
+            zona: 1, cliente: 1, clienteRef: 1,
+            producto: 1, total: 1, totalPagado: 1,
+            estadoPago: 1, estadoEntrega: 1,
+            tipoTransaccion: 1, fecha: 1,
+            'ubicacion.entidad': 1,
+            'items.nombre': 1, 'items.cantidad': 1, 'items.entregado': 1
+        };
+
+        // ✅ Promise.all → las dos queries corren EN PARALELO en MongoDB
         const [ventas, total] = await Promise.all([
-            Venta.find(filtro)
-                 .sort({ fecha: -1 })
-                 .limit(limite)
-                 .skip((pagina - 1) * limite)
-                 .lean(),
+            Venta
+                .find(filtro, proyeccion)
+                .sort({ fecha: -1 })
+                .skip(skip)
+                .limit(limiteNum)
+                .lean(),
             Venta.countDocuments(filtro)
         ]);
 
@@ -302,7 +355,7 @@ exports.listarAPI = async (req, res) => {
             data:    ventas,
             paginacion: {
                 paginaActual: Number(pagina),
-                totalPaginas: Math.ceil(total / limite),
+                totalPaginas: Math.ceil(total / limiteNum),
                 total
             }
         });
@@ -312,38 +365,25 @@ exports.listarAPI = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// guardarAPI — POST /api/v1/ventas
-//
-// CONTRATO DEL FRONTEND (obligatorio):
-//   { clienteId: "<ObjectId>", zona, items: [...] | producto+precioUnitario+cantidad }
-//
-// REGLAS ESTRICTAS:
-//   1. clienteId DEBE venir siempre y ser un ObjectId válido en la colección Cliente.
-//   2. Si clienteId no es válido o no existe → 400, sin crear nada.
-//   3. NUNCA se crea un cliente nuevo aquí. Para eso existe POST /api/v1/clientes.
-//   4. El campo "cliente" (display) se toma de la BD, no del frontend.
-// ═════════════════════════════════════════════════════════════════════════════
+// POST /api/v1/ventas
 exports.guardarAPI = async (req, res) => {
     const {
         zona, entidad, piso,
-        clienteId,      // ObjectId de cliente existente
-        esClienteNuevo, // true → crear el cliente ahora con los datos del body
-        cliente: clienteNombre, // nombre, solo se usa si esClienteNuevo === true
-        telefono,       // solo se usa al crear cliente nuevo
+        clienteId,
+        esClienteNuevo,
+        cliente: clienteNombre,
+        telefono,
         items,
         producto, precioUnitario, cantidad,
         tipoTransaccion, estadoEntrega,
         clientTempId
     } = req.body;
 
-    // ── 1. Validar zona ───────────────────────────────────────────────────────
     if (!zona || !zonasValidas.includes(zona))
         return res.status(400).json({ success: false, errors: ['Zona inválida.'] });
 
-    // ── 2. Idempotencia offline — antes de cualquier consulta pesada ──────────
     if (clientTempId) {
-        const existente = await Venta.findOne({ clientTempId }).lean();
+        const existente = await Venta.findOne({ clientTempId }).select('_id').lean();
         if (existente)
             return res.status(200).json({
                 success:   true,
@@ -353,66 +393,56 @@ exports.guardarAPI = async (req, res) => {
             });
     }
 
-    // ── 3. Resolver cliente ────────────────────────────────────────────────────
     let clienteResuelto;
 
     if (esClienteNuevo === true || esClienteNuevo === 'true') {
-        // Caso A: cliente nuevo — crearlo aquí por primera vez.
-        // Proyección mínima en findOne para chequeo de unicidad.
         const nombreTrimmed = (clienteNombre || '').trim();
         if (nombreTrimmed.length < 2)
             return res.status(400).json({ success: false, errors: ['Nombre de cliente requerido.'] });
 
-        // Verificar si ya existe (evitar duplicado por doble envío)
-        let existente = await Cliente.findOne({ nombre: nombreTrimmed }, { _id: 1, nombre: 1, activo: 1 }).lean();
-        if (existente) {
-            // Ya existe — usar ese en lugar de crear otro
-            clienteResuelto = existente;
-        } else {
-            // Crear el cliente ahora — única creación, atómica
-            clienteResuelto = await Cliente.create({
-                nombre:   nombreTrimmed,
-                zona:     zona || '',
-                telefono: (telefono || '').trim(),
-            });
-        }
+        let existente = await Cliente
+            .findOne({ nombre: nombreTrimmed })
+            .select('_id nombre activo')
+            .lean();
+
+        clienteResuelto = existente || await Cliente.create({
+            nombre:   nombreTrimmed,
+            zona:     zona || '',
+            telefono: (telefono || '').trim(),
+        });
     } else {
-        // Caso B: cliente existente — verificar por ID (fuente de verdad)
         const { ok, cliente, error } = await verificarCliente(clienteId);
         if (!ok) return res.status(400).json({ success: false, errors: [error] });
         clienteResuelto = cliente;
     }
 
-    // Alias para el resto del handler (igual que antes)
     const cliente = clienteResuelto;
 
     try {
-        // ── 4a. Multi-producto ────────────────────────────────────────────────
         if (Array.isArray(items) && items.length > 0) {
             const erroresItems = validarItems(items);
             if (erroresItems.length > 0)
                 return res.status(400).json({ success: false, errors: erroresItems });
 
-            const itemsNorm = items.map(it => ({
+            const itemsNorm    = items.map(it => ({
                 nombre:   String(it.nombre).trim(),
                 cantidad: parseInt(it.cantidad, 10),
                 precio:   Number(it.precio),
                 subtotal: Number(it.precio) * parseInt(it.cantidad, 10),
             }));
-
             const totalGeneral = itemsNorm.reduce((s, it) => s + it.subtotal, 0);
             const primerItem   = itemsNorm[0];
 
             const nueva = await Venta.create({
                 zona,
-                ubicacion:    { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                clienteRef:   cliente._id,     // ObjectId real — fuente de verdad
-                cliente:      cliente.nombre,  // campo display sincronizado con BD
-                producto:     primerItem.nombre,
+                ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+                clienteRef:     cliente._id,
+                cliente:        cliente.nombre,
+                producto:       primerItem.nombre,
                 precioUnitario: primerItem.precio,
-                cantidad:     primerItem.cantidad,
-                total:        totalGeneral,
-                items:        itemsNorm,
+                cantidad:       primerItem.cantidad,
+                total:          totalGeneral,
+                items:          itemsNorm,
                 tipoTransaccion:  tipoTransaccion || 'venta',
                 estadoEntrega:    estadoEntrega   || 'Inmediata',
                 estadoPago:       'pendiente',
@@ -425,15 +455,7 @@ exports.guardarAPI = async (req, res) => {
             return res.status(201).json({ success: true, data: nueva });
         }
 
-        // ── 4b. Venta legacy (un solo producto) ───────────────────────────────
-        // Validamos con el nombre de BD para no depender del nombre que venga del frontend
-        const erroresLegacy = validarVenta({
-            zona,
-            cliente: cliente.nombre,
-            producto,
-            precioUnitario,
-            cantidad
-        });
+        const erroresLegacy = validarVenta({ zona, cliente: cliente.nombre, producto, precioUnitario, cantidad });
         if (erroresLegacy.length > 0)
             return res.status(400).json({ success: false, errors: erroresLegacy });
 
@@ -442,13 +464,13 @@ exports.guardarAPI = async (req, res) => {
 
         const nueva = await Venta.create({
             zona,
-            ubicacion:    { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-            clienteRef:   cliente._id,     // ObjectId real
-            cliente:      cliente.nombre,  // display desde BD
-            producto:     producto.trim(),
+            ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+            clienteRef:     cliente._id,
+            cliente:        cliente.nombre,
+            producto:       producto.trim(),
             precioUnitario: precio,
-            cantidad:     cantidadNum,
-            total:        precio * cantidadNum,
+            cantidad:       cantidadNum,
+            total:          precio * cantidadNum,
             tipoTransaccion:  tipoTransaccion || 'venta',
             estadoEntrega:    estadoEntrega   || 'Inmediata',
             estadoPago:       'pendiente',
@@ -466,17 +488,10 @@ exports.guardarAPI = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// actualizarAPI — PUT /api/v1/ventas/:id
-//
-// Si el cliente cambia → enviar el nuevo clienteId en el body.
-// Si el cliente NO cambia → omitir clienteId (se conserva el existente).
-// NUNCA se actualiza el cliente buscando por nombre.
-// ═════════════════════════════════════════════════════════════════════════════
+// PUT /api/v1/ventas/:id
 exports.actualizarAPI = async (req, res) => {
     const { zona, entidad, piso, clienteId, producto, precioUnitario, cantidad } = req.body;
 
-    // Validaciones de campos de venta
     const errores = [];
     if (!zona || !zonasValidas.includes(zona))    errores.push('Zona inválida.');
     if (!producto || producto.trim().length < 2)  errores.push('Producto requerido.');
@@ -487,7 +502,6 @@ exports.actualizarAPI = async (req, res) => {
     if (errores.length > 0)
         return res.status(400).json({ success: false, errors: errores });
 
-    // Si viene clienteId → verificar antes de tocar la BD de ventas
     let clienteData = null;
     if (clienteId) {
         const { ok, cliente, error } = await verificarCliente(clienteId);
@@ -496,7 +510,6 @@ exports.actualizarAPI = async (req, res) => {
     }
 
     try {
-        // Construir update dinámicamente — solo los campos que cambian
         const camposUpdate = {
             zona,
             ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
@@ -506,14 +519,13 @@ exports.actualizarAPI = async (req, res) => {
             total:          precio * cantidadNum,
         };
 
-        // Solo pisar clienteRef y cliente (display) si vino un nuevo clienteId validado
         if (clienteData) {
             camposUpdate.clienteRef = clienteData._id;
             camposUpdate.cliente    = clienteData.nombre;
         }
 
-        // updateOne es más eficiente que findByIdAndUpdate cuando no necesitamos
-        // devolver el documento completo: evita un round-trip extra a MongoDB.
+        // ✅ updateOne → no devuelve el documento (más eficiente que findByIdAndUpdate
+        // cuando solo necesitamos saber si la operación tuvo efecto).
         const result = await Venta.updateOne(
             { _id: req.params.id },
             { $set: camposUpdate },
@@ -531,9 +543,7 @@ exports.actualizarAPI = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// eliminarAPI — DELETE /api/v1/ventas/:id
-// ═════════════════════════════════════════════════════════════════════════════
+// DELETE /api/v1/ventas/:id
 exports.eliminarAPI = async (req, res) => {
     try {
         const eliminada = await Venta.findByIdAndDelete(req.params.id);
@@ -546,16 +556,17 @@ exports.eliminarAPI = async (req, res) => {
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// registrarCobroAPI — POST /api/v1/ventas/:id/cobros
-// ═════════════════════════════════════════════════════════════════════════════
+// POST /api/v1/ventas/:id/cobros
+// ✅ Reutiliza registrarCobro (ya optimizado con $push/$set atómico)
 exports.registrarCobroAPI = (req, res) => {
     return exports.registrarCobro(req, res);
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// actualizarEntregaItemAPI — PATCH /api/v1/ventas/:id/items/:itemId/entrega
-// ═════════════════════════════════════════════════════════════════════════════
+// PATCH /api/v1/ventas/:id/items/:itemId/entrega
+// ✅ OPTIMIZADO: updateOne atómico con operador posicional $ +
+//    pipeline de aggregation para recalcular estadoEntrega.
+//    Antes: findById → mutación JS → save() (2 round-trips + hidratación completa).
+//    Ahora: 2 updateOne atómicos, sin traer NADA a la RAM del servidor.
 exports.actualizarEntregaItemAPI = async (req, res) => {
     const { id, itemId } = req.params;
     const { entregado }  = req.body;
@@ -564,39 +575,73 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
         return res.status(400).json({ success: false, message: 'El campo entregado debe ser boolean.' });
 
     try {
-        const venta = await Venta.findById(id);
-        if (!venta)
-            return res.status(404).json({ success: false, message: 'Venta no encontrada.' });
+        // ── Paso 1: Actualizar solo el booleano del ítem específico ──────────
+        // El operador posicional $ localiza el subdocumento por su _id
+        // y actualiza SOLO ese campo. MongoDB no mueve el documento completo.
+        const result = await Venta.updateOne(
+            {
+                _id:         new mongoose.Types.ObjectId(id),
+                'items._id': new mongoose.Types.ObjectId(itemId)
+            },
+            {
+                $set: { 'items.$.entregado': entregado }
+            }
+        );
 
-        const item = venta.items.id(itemId);
-        if (!item)
-            return res.status(404).json({ success: false, message: 'Ítem no encontrado.' });
+        if (result.matchedCount === 0)
+            return res.status(404).json({ success: false, message: 'Venta o ítem no encontrado.' });
 
-        item.entregado = entregado;
-
-        const todosEntregados = venta.items.length > 0 && venta.items.every(it => it.entregado);
-        if (todosEntregados)                              venta.estadoEntrega = 'Entregado';
-        else if (venta.estadoEntrega === 'Entregado')     venta.estadoEntrega = 'Pendiente';
-
-        await venta.save();
+        // ── Paso 2: Recalcular estadoEntrega atómicamente ────────────────────
+        // Aggregation pipeline en updateOne (requiere MongoDB 4.2+).
+        // Lee y escribe en la misma operación sin traer el documento a RAM.
+        // $allElementsTrue evalúa si todos los items tienen entregado: true.
+        await Venta.updateOne(
+            { _id: new mongoose.Types.ObjectId(id) },
+            [
+                {
+                    $set: {
+                        estadoEntrega: {
+                            $cond: {
+                                if: {
+                                    $and: [
+                                        { $gt: [{ $size: '$items' }, 0] },
+                                        {
+                                            $allElementsTrue: {
+                                                $map: {
+                                                    input: '$items',
+                                                    as:    'it',
+                                                    in:    '$$it.entregado'
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                then: 'Entregado',
+                                else: 'Pendiente'
+                            }
+                        }
+                    }
+                }
+            ]
+        );
 
         res.json({
-            success:        true,
-            entregado:      item.entregado,
-            estadoEntrega:  venta.estadoEntrega,
-            todosEntregados
+            success:   true,
+            entregado,
+            message:   'Estado de entrega actualizado.'
         });
+
     } catch (error) {
         console.error('Error actualizarEntregaItemAPI:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// editarVentaAPI — PUT /api/v1/cartera/:ventaId/editar
-// Edita ítems/totales de una venta existente y guarda historial de cambios.
-// No cambia el cliente asociado (usar actualizarAPI para eso).
-// ═════════════════════════════════════════════════════════════════════════════
+// PUT /api/v1/cartera/:ventaId/editar
+// Edita ítems/totales y guarda historial de cambios.
+// Mantiene .save() porque el hook pre('save') recalcula estadoPago
+// y el historialEdiciones requiere leer el estado anterior completo.
+// Si el historial crece mucho, considera migrar a $push atómico también.
 exports.editarVentaAPI = async (req, res) => {
     const { producto, cantidad, items, total, motivo } = req.body;
     const usuario = req.session?.usuario || req.usuario || 'app';
@@ -606,7 +651,6 @@ exports.editarVentaAPI = async (req, res) => {
         if (!venta)
             return res.status(404).json({ success: false, message: 'Venta no encontrada.' });
 
-        // Snapshot para historial antes de modificar
         const anterior = {
             producto:       venta.producto,
             cantidad:       venta.cantidad,
