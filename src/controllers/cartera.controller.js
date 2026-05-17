@@ -52,29 +52,23 @@ exports.mostrarDetalle = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // WEB — POST /:ventaId/editar  (formulario HTML)
-// FIX: este método faltaba — era la causa del error al guardar
 // ─────────────────────────────────────────────────────────────
 exports.editarVentaDesdeWeb = async (req, res) => {
     const { ventaId }  = req.params;
     const { producto, cantidad, total, motivo, clienteNombre } = req.body;
     const usuario = req.session?.usuario?.nombre || req.session?.usuario || 'web';
 
-    // clienteNombre se envía como campo oculto en el formulario
-    // para poder redirigir al detalle del cliente correcto
     const clienteRedirect = clienteNombre
         ? encodeURIComponent(clienteNombre)
         : '';
 
     try {
-        // Construir el objeto de datos con lo que venga del formulario
         const datos = { motivo: motivo || 'Edición desde web' };
 
         if (producto !== undefined) datos.producto = producto.trim();
         if (cantidad !== undefined) datos.cantidad = parseInt(cantidad, 10);
         if (total    !== undefined) datos.total    = parseFloat(total);
 
-        // Si vienen ítems del formulario (formato items[0][nombre], etc.)
-        // Express los parsea como req.body.items automáticamente si usas express.urlencoded
         if (Array.isArray(req.body.items)) {
             datos.items = req.body.items.map(it => ({
                 _id:      it._id      || undefined,
@@ -82,9 +76,7 @@ exports.editarVentaDesdeWeb = async (req, res) => {
                 cantidad: parseInt(it.cantidad, 10) || 1,
                 precio:   parseFloat(it.precio)     || 0,
             }));
-            // Recalcular total desde los ítems
             datos.total = datos.items.reduce((s, it) => s + it.precio * it.cantidad, 0);
-            // Actualizar campos legacy con el primer ítem
             if (datos.items.length > 0) {
                 datos.producto = datos.items[0].nombre;
                 datos.cantidad = datos.items[0].cantidad;
@@ -92,7 +84,6 @@ exports.editarVentaDesdeWeb = async (req, res) => {
         }
 
         await carteraService.editarVenta(ventaId, datos, usuario);
-
         res.redirect(`/cartera/${clienteRedirect}?ok=1`);
     } catch (error) {
         console.error('Error editarVentaDesdeWeb:', error);
@@ -137,7 +128,7 @@ exports.detalleAPI = async (req, res) => {
     }
 };
 
-// PUT /api/v1/cartera/:ventaId/editar  (app móvil / fetch)
+// PUT /api/v1/cartera/:ventaId/editar  (app móvil)
 exports.editarVentaAPI = async (req, res) => {
     try {
         const { ventaId } = req.params;
@@ -154,6 +145,21 @@ exports.editarVentaAPI = async (req, res) => {
         });
     } catch (error) {
         console.error('Error editarVentaAPI:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// DELETE /api/v1/cartera/:ventaId  (app móvil — pedido vacío)
+exports.eliminarVentaAPI = async (req, res) => {
+    try {
+        const { ventaId } = req.params;
+        const Venta = require('../models/venta.model');
+        const eliminada = await Venta.findByIdAndDelete(ventaId);
+        if (!eliminada)
+            return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
+        res.json({ success: true, message: 'Pedido eliminado correctamente.' });
+    } catch (error) {
+        console.error('Error eliminarVentaAPI:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

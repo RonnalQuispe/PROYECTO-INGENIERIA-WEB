@@ -8,13 +8,13 @@ const carteraCtrl    = require('../controllers/cartera.controller');
 
 router.use(isLoggedIn);
 
+// ── API (app móvil) — van PRIMERO para que Express no las confunda con nombres de cliente ──
+router.get('/api',                  carteraCtrl.listarAPI);        // GET  /api/v1/cartera (lista)
+router.put('/:ventaId/editar',      carteraCtrl.editarVentaAPI);   // PUT  /api/v1/cartera/:ventaId/editar
+router.delete('/:ventaId',          carteraCtrl.eliminarVentaAPI); // DELETE /api/v1/cartera/:ventaId
+
 // ── Web ───────────────────────────────────────────────────────────────────────
 router.get('/',          carteraCtrl.mostrarCartera);  // Resumen global
 router.get('/:cliente',  carteraCtrl.mostrarDetalle);  // Detalle por cliente
-
-// ── API (app móvil) ───────────────────────────────────────────────────────────
-// FIX: esta ruta faltaba — era la causa del error "no se pudo guardar la edición"
-// Debe ir ANTES de /:cliente para que Express no la confunda con un nombre de cliente
-router.put('/:ventaId/editar', carteraCtrl.editarVentaAPI);
 
 module.exports = router;
