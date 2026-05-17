@@ -327,9 +327,12 @@ exports.listarAPI = async (req, res) => {
 exports.guardarAPI = async (req, res) => {
     const {
         zona, entidad, piso,
-        clienteId,           // ← ÚNICO campo de identificación de cliente aceptado
-        items,               // array multi-producto (opcional)
-        producto, precioUnitario, cantidad,  // campos legacy un solo producto
+        clienteId,      // ObjectId de cliente existente
+        esClienteNuevo, // true → crear el cliente ahora con los datos del body
+        cliente: clienteNombre, // nombre, solo se usa si esClienteNuevo === true
+        telefono,       // solo se usa al crear cliente nuevo
+        items,
+        producto, precioUnitario, cantidad,
         tipoTransaccion, estadoEntrega,
         clientTempId
     } = req.body;
@@ -350,11 +353,38 @@ exports.guardarAPI = async (req, res) => {
             });
     }
 
-    // ── 3. Verificar cliente por ID — ÚNICA fuente de verdad ─────────────────
-    // verificarCliente: findById + proyección mínima + lean()
-    // Usa el índice _id automático de MongoDB. Instantáneo a cualquier volumen.
-    const { ok, cliente, error } = await verificarCliente(clienteId);
-    if (!ok) return res.status(400).json({ success: false, errors: [error] });
+    // ── 3. Resolver cliente ────────────────────────────────────────────────────
+    let clienteResuelto;
+
+    if (esClienteNuevo === true || esClienteNuevo === 'true') {
+        // Caso A: cliente nuevo — crearlo aquí por primera vez.
+        // Proyección mínima en findOne para chequeo de unicidad.
+        const nombreTrimmed = (clienteNombre || '').trim();
+        if (nombreTrimmed.length < 2)
+            return res.status(400).json({ success: false, errors: ['Nombre de cliente requerido.'] });
+
+        // Verificar si ya existe (evitar duplicado por doble envío)
+        let existente = await Cliente.findOne({ nombre: nombreTrimmed }, { _id: 1, nombre: 1, activo: 1 }).lean();
+        if (existente) {
+            // Ya existe — usar ese en lugar de crear otro
+            clienteResuelto = existente;
+        } else {
+            // Crear el cliente ahora — única creación, atómica
+            clienteResuelto = await Cliente.create({
+                nombre:   nombreTrimmed,
+                zona:     zona || '',
+                telefono: (telefono || '').trim(),
+            });
+        }
+    } else {
+        // Caso B: cliente existente — verificar por ID (fuente de verdad)
+        const { ok, cliente, error } = await verificarCliente(clienteId);
+        if (!ok) return res.status(400).json({ success: false, errors: [error] });
+        clienteResuelto = cliente;
+    }
+
+    // Alias para el resto del handler (igual que antes)
+    const cliente = clienteResuelto;
 
     try {
         // ── 4a. Multi-producto ────────────────────────────────────────────────
