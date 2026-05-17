@@ -2,16 +2,15 @@
 // src/middleware/auth.middleware.js
 // ============================================================
 // Exporta TRES funciones:
-//   isLoggedIn  → protege rutas web (sesión Express)
-//   verifyJWT   → protege rutas /api/v1 (Bearer token)
-//   generarToken→ crea un JWT firmado para el login API
+//   isLoggedIn   → protege rutas web (sesión Express)
+//   verifyJWT    → protege rutas /api/v1 (Bearer token)
+//   generarToken → crea un JWT firmado para el login API
 // ============================================================
 
 const jwt = require('jsonwebtoken');
 
 // ── 1. PROTECCIÓN WEB (sesión) ───────────────────────────────────────────────
-// Comportamiento IDÉNTICO al middleware original.
-// Si no hay sesión → redirige al login (navegador).
+// Si no hay sesión activa → redirige al login (navegador).
 const isLoggedIn = (req, res, next) => {
     if (req.session && req.session.usuarioId) {
         return next();
@@ -20,12 +19,12 @@ const isLoggedIn = (req, res, next) => {
 };
 
 // ── 2. PROTECCIÓN API (JWT) ──────────────────────────────────────────────────
-// Espera el header:  Authorization: Bearer <token>
+// Espera el header: Authorization: Bearer <token>
 // Si el token es válido → adjunta req.usuarioId y req.usuario, llama next().
-// Si no → responde JSON 401/403 (nunca redirige, la app móvil no usa HTML).
+// Si no → responde JSON 401/403 (nunca redirige).
 const verifyJWT = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // "Bearer <token>"
+    const token      = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
         return res.status(401).json({
@@ -48,8 +47,8 @@ const verifyJWT = (req, res, next) => {
 };
 
 // ── 3. GENERADOR DE TOKEN ────────────────────────────────────────────────────
-// Recibe el documento de Mongoose del usuario.
-// Devuelve un string JWT firmado con los datos mínimos necesarios.
+// Recibe el documento Mongoose del usuario.
+// Devuelve un JWT firmado con los datos mínimos necesarios.
 const generarToken = (usuario) => {
     return jwt.sign(
         {
