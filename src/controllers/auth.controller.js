@@ -1,194 +1,130 @@
 // ============================================================
-// src/controllers/cartera.controller.js  —  OPTIMIZADO
+// src/controllers/auth.controller.js
 // ============================================================
-// CAMBIOS vs. original:
-//   ① MOVIDO el require de Venta al tope del archivo (era dentro de
-//     editarVentaAPI y eliminarVentaAPI — re-require en cada request).
-//     Node.js cachea módulos, pero la resolución del path en cada
-//     llamada tiene overhead innecesario y confunde el árbol de deps.
-//   ② editarVentaAPI: lógica de eliminación separada de la lógica de
-//     edición — más legible, sin cambio de rendimiento.
-//   ③ Resto de métodos: sin cambios funcionales. El rendimiento de este
-//     controller depende principalmente de cartera.service.js (ver el
-//     archivo cartera.service.js optimizado para los pipelines reales).
+// Métodos WEB (sin cambios de comportamiento):
+//   mostrarLogin, procesarLogin, logout, mostrarInicio, crearUsuario
+//
+// Método API NUEVO:
+//   loginAPI  →  POST /api/v1/auth/login  →  responde JWT en JSON
 // ============================================================
 
-const carteraService = require('../services/cartera.service');
-const Venta          = require('../models/venta.model'); // ✅ al tope, no dentro de cada método
+const Usuario      = require('../models/usuario.model');
+const { generarToken } = require('../middleware/auth.middleware');
 
-// ─────────────────────────────────────────────────────────────
-// WEB — VISTA PRINCIPAL
-// ─────────────────────────────────────────────────────────────
-exports.mostrarCartera = async (req, res) => {
-    const filtros = {
-        zona:    req.query.zona    || '',
-        cliente: req.query.cliente || ''
-    };
-    try {
-        const clientes        = await carteraService.getResumenCartera(filtros);
-        const totalCartera    = clientes.reduce((s, c) => s + c.totalFacturado, 0);
-        const totalCobrado    = clientes.reduce((s, c) => s + c.totalPagado,    0);
-        const totalPendiente  = clientes.reduce((s, c) => s + c.saldoPendiente, 0);
-        const clientesEnDeuda = clientes.filter(c => c.saldoPendiente > 0).length;
-
-        res.render('cartera/index', {
-            usuario: req.session.usuario,
-            titulo:  'Cartera de Clientes — Sistema Jalej',
-            clientes, filtros,
-            kpis: { totalCartera, totalCobrado, totalPendiente, clientesEnDeuda }
-        });
-    } catch (error) {
-        console.error('Error cartera:', error);
-        res.status(500).send('Error al cargar la cartera.');
-    }
+// ── Mostrar página de login ──────────────────────────────────────────────────
+exports.mostrarLogin = (req, res) => {
+    if (req.session.usuarioId) return res.redirect('/inicio');
+    res.render('index', { titulo: 'AdminExpress - Login', error: null });
 };
 
-// ─────────────────────────────────────────────────────────────
-// WEB — VISTA DETALLE
-// ─────────────────────────────────────────────────────────────
-exports.mostrarDetalle = async (req, res) => {
-    try {
-        const nombreCliente = decodeURIComponent(req.params.cliente);
-        const resumen       = await carteraService.getDetalleCliente(nombreCliente);
-        res.render('cartera/detalle', {
-            usuario: req.session.usuario,
-            titulo:  `Cartera · ${nombreCliente}`,
-            resumen,
-            mensajeExito: req.query.ok  === '1' ? 'Pedido actualizado correctamente.' : null,
-            mensajeError: req.query.err === '1' ? 'No se pudo guardar la edición.'    : null,
-        });
-    } catch (error) {
-        console.error('Error detalle cartera:', error);
-        res.redirect('/cartera');
-    }
-};
-
-// ─────────────────────────────────────────────────────────────
-// WEB — POST /:ventaId/editar  (formulario HTML)
-// ─────────────────────────────────────────────────────────────
-exports.editarVentaDesdeWeb = async (req, res) => {
-    const { ventaId }  = req.params;
-    const { producto, cantidad, total, motivo, clienteNombre } = req.body;
-    const usuario = req.session?.usuario?.nombre || req.session?.usuario || 'web';
-
-    const clienteRedirect = clienteNombre ? encodeURIComponent(clienteNombre) : '';
+// ── Procesar login (navegador) ───────────────────────────────────────────────
+exports.procesarLogin = async (req, res) => {
+    const { usuario, contrasena } = req.body;
 
     try {
-        const datos = { motivo: motivo || 'Edición desde web' };
+        const usuarioEncontrado = await Usuario.findOne({ usuario });
 
-        if (producto !== undefined) datos.producto = producto.trim();
-        if (cantidad !== undefined) datos.cantidad = parseInt(cantidad, 10);
-        if (total    !== undefined) datos.total    = parseFloat(total);
-
-        if (Array.isArray(req.body.items)) {
-            datos.items = req.body.items.map(it => ({
-                _id:      it._id      || undefined,
-                nombre:   it.nombre   || '',
-                cantidad: parseInt(it.cantidad, 10) || 1,
-                precio:   parseFloat(it.precio)     || 0,
-            }));
-            datos.total = datos.items.reduce((s, it) => s + it.precio * it.cantidad, 0);
-            if (datos.items.length > 0) {
-                datos.producto = datos.items[0].nombre;
-                datos.cantidad = datos.items[0].cantidad;
-            }
-        }
-
-        await carteraService.editarVenta(ventaId, datos, usuario);
-        res.redirect(`/cartera/${clienteRedirect}?ok=1`);
-    } catch (error) {
-        console.error('Error editarVentaDesdeWeb:', error);
-        res.redirect(`/cartera/${clienteRedirect}?err=1`);
-    }
-};
-
-// ═════════════════════════════════════════════════════════════
-// API — MÉTODOS JSON PARA LA APP MÓVIL
-// ═════════════════════════════════════════════════════════════
-
-// GET /api/v1/cartera
-exports.listarAPI = async (req, res) => {
-    const filtros = {
-        zona:    req.query.zona    || '',
-        cliente: req.query.cliente || ''
-    };
-    try {
-        const clientes = await carteraService.getResumenCartera(filtros);
-        const kpis = {
-            totalCartera:    clientes.reduce((s, c) => s + c.totalFacturado, 0),
-            totalCobrado:    clientes.reduce((s, c) => s + c.totalPagado,    0),
-            totalPendiente:  clientes.reduce((s, c) => s + c.saldoPendiente, 0),
-            clientesEnDeuda: clientes.filter(c => c.saldoPendiente > 0).length
-        };
-        res.json({ success: true, data: { clientes, kpis } });
-    } catch (error) {
-        console.error('Error listarAPI cartera:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// GET /api/v1/cartera/:cliente
-exports.detalleAPI = async (req, res) => {
-    try {
-        const nombreCliente = decodeURIComponent(req.params.cliente);
-        const resumen       = await carteraService.getDetalleCliente(nombreCliente);
-        res.json({ success: true, data: resumen });
-    } catch (error) {
-        console.error('Error detalleAPI cartera:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// PUT /api/v1/cartera/:ventaId/editar
-// Si items llega vacío o total === 0 → elimina el pedido directamente.
-exports.editarVentaAPI = async (req, res) => {
-    try {
-        const { ventaId } = req.params;
-        const datos       = req.body;
-        const usuario     = req.usuario?.nombre || req.session?.usuario?.nombre || 'app';
-
-        // ✅ Venta ya está importado al tope del archivo — no re-require aquí
-        const itemsVacios = Array.isArray(datos.items) && datos.items.length === 0;
-        const totalCero   = parseFloat(datos.total) === 0;
-
-        // Caso: eliminar pedido vacío
-        if (itemsVacios || totalCero) {
-            const eliminada = await Venta.findByIdAndDelete(ventaId);
-            if (!eliminada)
-                return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
-            return res.json({
-                success:   true,
-                eliminado: true,
-                message:   'Pedido eliminado porque quedó sin ítems.',
+        if (!usuarioEncontrado) {
+            return res.render('index', {
+                titulo: 'Login',
+                error: 'Usuario o contraseña incorrectos'
             });
         }
 
-        // Caso: editar pedido existente
-        const ventaActualizada = await carteraService.editarVenta(ventaId, datos, usuario);
-        res.json({
-            success:   true,
-            message:   'Pedido actualizado correctamente',
-            ventaId:   ventaActualizada._id,
-            total:     ventaActualizada.total,
-            historial: ventaActualizada.historialEdiciones?.length || 0,
-        });
+        const esValida = await usuarioEncontrado.compararContrasena(contrasena);
+
+        if (!esValida) {
+            return res.render('index', {
+                titulo: 'Login',
+                error: 'Usuario o contraseña incorrectos'
+            });
+        }
+
+        req.session.usuarioId = usuarioEncontrado._id;
+        req.session.usuario   = usuarioEncontrado.usuario;
+
+        res.redirect('/inicio');
+
     } catch (error) {
-        console.error('Error editarVentaAPI:', error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.render('index', { titulo: 'Login', error: 'Error del servidor' });
     }
 };
 
-// DELETE /api/v1/cartera/:ventaId
-exports.eliminarVentaAPI = async (req, res) => {
+// ── Logout ───────────────────────────────────────────────────────────────────
+exports.logout = (req, res) => {
+    req.session.destroy(() => {
+        res.redirect('/login');
+    });
+};
+
+// ── Página de inicio (protegida) ─────────────────────────────────────────────
+exports.mostrarInicio = (req, res) => {
+    res.render('paginaInicio/Inicio', { usuario: req.session.usuario });
+};
+
+// ── Crear usuario admin (uso único de inicialización) ────────────────────────
+exports.crearUsuario = async (req, res) => {
     try {
-        const { ventaId } = req.params;
-        // ✅ Venta ya está importado al tope — sin re-require
-        const eliminada = await Venta.findByIdAndDelete(ventaId);
-        if (!eliminada)
-            return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
-        res.json({ success: true, message: 'Pedido eliminado correctamente.' });
+        const existe = await Usuario.findOne({ usuario: 'admin' });
+        if (existe) return res.send('El usuario admin ya existe');
+
+        const nuevo = new Usuario({ usuario: 'admin', contrasena: '1234' });
+        await nuevo.save();
+        res.send('✅ Usuario admin creado con contraseña 1234. Ahora borra esta ruta del código.');
+    } catch (err) {
+        res.send('Error: ' + err.message);
+    }
+};
+
+// ── LOGIN API ────────────────────────────────────────────────────────────────
+// POST /api/v1/auth/login
+// Body JSON: { "usuario": "admin", "contrasena": "1234" }
+// Responde:  { success, token, usuario: { id, usuario } }
+// Este token se guarda en el móvil y se envía en cada petición:
+//   Authorization: Bearer <token>
+exports.loginAPI = async (req, res) => {
+    const { usuario, contrasena } = req.body;
+
+    if (!usuario || !contrasena) {
+        return res.status(400).json({
+            success: false,
+            message: 'Usuario y contraseña son requeridos.'
+        });
+    }
+
+    try {
+        const usuarioEncontrado = await Usuario.findOne({ usuario });
+
+        if (!usuarioEncontrado) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuario o contraseña incorrectos.'
+            });
+        }
+
+        const esValida = await usuarioEncontrado.compararContrasena(contrasena);
+
+        if (!esValida) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuario o contraseña incorrectos.'
+            });
+        }
+
+        const token = generarToken(usuarioEncontrado);
+
+        res.status(200).json({
+            success: true,
+            token,
+            usuario: {
+                id:      usuarioEncontrado._id,
+                usuario: usuarioEncontrado.usuario
+            }
+        });
+
     } catch (error) {
-        console.error('Error eliminarVentaAPI:', error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Error loginAPI:', error);
+        res.status(500).json({ success: false, message: 'Error del servidor.' });
     }
 };

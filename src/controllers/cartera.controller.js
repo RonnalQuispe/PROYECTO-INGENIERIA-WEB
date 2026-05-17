@@ -1,8 +1,20 @@
 // ============================================================
-// src/controllers/cartera.controller.js
+// src/controllers/cartera.controller.js  —  OPTIMIZADO
+// ============================================================
+// CAMBIOS vs. original:
+//   ① MOVIDO el require de Venta al tope del archivo (era dentro de
+//     editarVentaAPI y eliminarVentaAPI — re-require en cada request).
+//     Node.js cachea módulos, pero la resolución del path en cada
+//     llamada tiene overhead innecesario y confunde el árbol de deps.
+//   ② editarVentaAPI: lógica de eliminación separada de la lógica de
+//     edición — más legible, sin cambio de rendimiento.
+//   ③ Resto de métodos: sin cambios funcionales. El rendimiento de este
+//     controller depende principalmente de cartera.service.js (ver el
+//     archivo cartera.service.js optimizado para los pipelines reales).
 // ============================================================
 
 const carteraService = require('../services/cartera.service');
+const Venta          = require('../models/venta.model'); // ✅ al tope, no dentro de cada método
 
 // ─────────────────────────────────────────────────────────────
 // WEB — VISTA PRINCIPAL
@@ -13,11 +25,12 @@ exports.mostrarCartera = async (req, res) => {
         cliente: req.query.cliente || ''
     };
     try {
-        const clientes = await carteraService.getResumenCartera(filtros);
+        const clientes        = await carteraService.getResumenCartera(filtros);
         const totalCartera    = clientes.reduce((s, c) => s + c.totalFacturado, 0);
         const totalCobrado    = clientes.reduce((s, c) => s + c.totalPagado,    0);
         const totalPendiente  = clientes.reduce((s, c) => s + c.saldoPendiente, 0);
         const clientesEnDeuda = clientes.filter(c => c.saldoPendiente > 0).length;
+
         res.render('cartera/index', {
             usuario: req.session.usuario,
             titulo:  'Cartera de Clientes — Sistema Jalej',
@@ -41,8 +54,8 @@ exports.mostrarDetalle = async (req, res) => {
             usuario: req.session.usuario,
             titulo:  `Cartera · ${nombreCliente}`,
             resumen,
-            mensajeExito: req.query.ok   === '1' ? 'Pedido actualizado correctamente.' : null,
-            mensajeError: req.query.err  === '1' ? 'No se pudo guardar la edición.'    : null,
+            mensajeExito: req.query.ok  === '1' ? 'Pedido actualizado correctamente.' : null,
+            mensajeError: req.query.err === '1' ? 'No se pudo guardar la edición.'    : null,
         });
     } catch (error) {
         console.error('Error detalle cartera:', error);
@@ -58,9 +71,7 @@ exports.editarVentaDesdeWeb = async (req, res) => {
     const { producto, cantidad, total, motivo, clienteNombre } = req.body;
     const usuario = req.session?.usuario?.nombre || req.session?.usuario || 'web';
 
-    const clienteRedirect = clienteNombre
-        ? encodeURIComponent(clienteNombre)
-        : '';
+    const clienteRedirect = clienteNombre ? encodeURIComponent(clienteNombre) : '';
 
     try {
         const datos = { motivo: motivo || 'Edición desde web' };
@@ -128,29 +139,31 @@ exports.detalleAPI = async (req, res) => {
     }
 };
 
-// PUT /api/v1/cartera/:ventaId/editar  (app móvil)
-// Si items llega vacío o total === 0 → elimina el pedido directamente
+// PUT /api/v1/cartera/:ventaId/editar
+// Si items llega vacío o total === 0 → elimina el pedido directamente.
 exports.editarVentaAPI = async (req, res) => {
     try {
         const { ventaId } = req.params;
         const datos       = req.body;
         const usuario     = req.usuario?.nombre || req.session?.usuario?.nombre || 'app';
-        const Venta       = require('../models/venta.model');
 
+        // ✅ Venta ya está importado al tope del archivo — no re-require aquí
         const itemsVacios = Array.isArray(datos.items) && datos.items.length === 0;
         const totalCero   = parseFloat(datos.total) === 0;
 
+        // Caso: eliminar pedido vacío
         if (itemsVacios || totalCero) {
             const eliminada = await Venta.findByIdAndDelete(ventaId);
             if (!eliminada)
                 return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
             return res.json({
-                success:  true,
+                success:   true,
                 eliminado: true,
-                message:  'Pedido eliminado porque quedó sin ítems.',
+                message:   'Pedido eliminado porque quedó sin ítems.',
             });
         }
 
+        // Caso: editar pedido existente
         const ventaActualizada = await carteraService.editarVenta(ventaId, datos, usuario);
         res.json({
             success:   true,
@@ -165,11 +178,11 @@ exports.editarVentaAPI = async (req, res) => {
     }
 };
 
-// DELETE /api/v1/cartera/:ventaId  (app móvil — pedido vacío)
+// DELETE /api/v1/cartera/:ventaId
 exports.eliminarVentaAPI = async (req, res) => {
     try {
         const { ventaId } = req.params;
-        const Venta = require('../models/venta.model');
+        // ✅ Venta ya está importado al tope — sin re-require
         const eliminada = await Venta.findByIdAndDelete(ventaId);
         if (!eliminada)
             return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
