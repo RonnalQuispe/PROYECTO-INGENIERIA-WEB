@@ -129,11 +129,27 @@ exports.detalleAPI = async (req, res) => {
 };
 
 // PUT /api/v1/cartera/:ventaId/editar  (app móvil)
+// Si items llega vacío o total === 0 → elimina el pedido directamente
 exports.editarVentaAPI = async (req, res) => {
     try {
         const { ventaId } = req.params;
         const datos       = req.body;
-        const usuario = req.usuario?.nombre || req.session?.usuario?.nombre || 'app';
+        const usuario     = req.usuario?.nombre || req.session?.usuario?.nombre || 'app';
+        const Venta       = require('../models/venta.model');
+
+        const itemsVacios = Array.isArray(datos.items) && datos.items.length === 0;
+        const totalCero   = parseFloat(datos.total) === 0;
+
+        if (itemsVacios || totalCero) {
+            const eliminada = await Venta.findByIdAndDelete(ventaId);
+            if (!eliminada)
+                return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
+            return res.json({
+                success:  true,
+                eliminado: true,
+                message:  'Pedido eliminado porque quedó sin ítems.',
+            });
+        }
 
         const ventaActualizada = await carteraService.editarVenta(ventaId, datos, usuario);
         res.json({
