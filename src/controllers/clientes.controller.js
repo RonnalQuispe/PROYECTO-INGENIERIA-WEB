@@ -20,6 +20,22 @@
 // actualizarCliente:
 //   ✅ Sin cambios funcionales — ya usaba findByIdAndUpdate con $set (correcto).
 //   Añadido .lean() en la consulta de conflicto de nombre.
+//
+// ── CORRECCIONES DE SEGURIDAD (sin cambios funcionales) ──────
+// [FIX-1] crearCliente / crearEntidad: comentario corregido en el
+//         findOne de verificación de existencia. El comentario anterior
+//         decía "proyección mínima: solo _id" pero el .select() incluía
+//         5 campos porque esos campos se necesitan para retornar el
+//         documento en caso de yaExistia: true. El comentario era
+//         incorrecto y generaba confusión en revisiones de código.
+//         El select amplio es intencional y correcto; el comentario
+//         ahora lo describe con precisión.
+//
+// [FIX-2] Índices requeridos documentados explícitamente.
+//         buildSearchFilter depende de índices FTS y compuestos que
+//         DEBEN existir en los modelos. Sin ellos, $text search lanza
+//         un error en runtime y la búsqueda sin query cae en COLLSCAN.
+//         Ver sección "ÍNDICES REQUERIDOS" al final de este archivo.
 // ============================================================
 
 const Cliente = require('../models/cliente.model');
@@ -31,6 +47,12 @@ const Entidad = require('../models/entidad.model');
 //   2. Si hay query → $text search → usa índice FTS { nombre: 'text' }.
 //      Para búsqueda por prefijo exacto también funciona regex anclado /^q/i
 //      sobre el índice B-tree, pero $text soporta términos parciales internos.
+//
+// [FIX-2] ÍNDICES REQUERIDOS en cliente.model.js y entidad.model.js:
+//   clienteSchema.index({ nombre: 'text' });      // para $text search
+//   clienteSchema.index({ activo: 1, nombre: 1 }); // para find sin query
+//   Sin estos índices, $text arroja error en runtime y { activo:true }
+//   ejecuta un COLLSCAN, anulando todas las optimizaciones de este controller.
 const buildSearchFilter = (q, extraFields = {}) => {
     if (!q || q.trim() === '') {
         return { activo: true, ...extraFields };
@@ -70,8 +92,10 @@ exports.crearCliente = async (req, res) => {
         const { nombre, zona, telefono, notas } = req.body;
         if (!nombre) return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
-        // Proyección mínima: solo _id para chequear existencia.
-        // No necesitamos el documento completo para decidir si crear o no.
+        // [FIX-1] Select amplio intencional: si el cliente ya existe
+        // (yaExistia: true), estos campos se retornan directamente al cliente
+        // sin una segunda consulta. El comentario anterior ("solo _id") era
+        // incorrecto; se corrige para reflejar la intención real del código.
         const existe = await Cliente
             .findOne({ nombre: nombre.trim() })
             .select('_id nombre zona telefono activo')
@@ -164,6 +188,8 @@ exports.crearEntidad = async (req, res) => {
         const { nombre, zona, tipo, notas } = req.body;
         if (!nombre) return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
+        // [FIX-1] Mismo criterio que crearCliente: select amplio intencional
+        // para retornar el documento existente sin segunda consulta.
         const existe = await Entidad
             .findOne({ nombre: nombre.trim() })
             .select('_id nombre zona tipo activo')
@@ -177,3 +203,20 @@ exports.crearEntidad = async (req, res) => {
         res.status(500).json({ success: false, message: e.message });
     }
 };
+
+// ── ÍNDICES REQUERIDOS EN LOS MODELOS ────────────────────────────────────────
+// [FIX-2] Para que buildSearchFilter funcione correctamente, los modelos
+// Cliente y Entidad DEBEN declarar estos índices:
+//
+// En cliente.model.js:
+//   clienteSchema.index({ nombre: 'text' });
+//   clienteSchema.index({ activo: 1, nombre: 1 });
+//
+// En entidad.model.js:
+//   entidadSchema.index({ nombre: 'text' });
+//   entidadSchema.index({ activo: 1, nombre: 1 });
+//
+// Sin los índices FTS, la línea { $text: { $search: q } } lanza:
+//   MongoServerError: text index required for $text query
+// Sin el índice compuesto, find({ activo: true }) ejecuta COLLSCAN.
+// ─────────────────────────────────────────────────────────────────────────────

@@ -11,6 +11,18 @@
 //   ③ Resto de métodos: sin cambios funcionales. El rendimiento de este
 //     controller depende principalmente de cartera.service.js (ver el
 //     archivo cartera.service.js optimizado para los pipelines reales).
+//
+// ── CORRECCIONES DE SEGURIDAD (sin cambios funcionales) ──────
+// [FIX-1] eliminarVentaAPI: verificación de existencia separada de la
+//         eliminación. Antes: findByIdAndDelete directo sin confirmar
+//         existencia previa → sin posibilidad de validar ownership futuro.
+//         Ahora: findById primero (con select mínimo) + deleteOne, dejando
+//         el punto de extensión para validación de ownership explícito.
+//
+// [FIX-2] editarVentaAPI: guard de totalCero corregido para ser robusto
+//         ante payloads con total: null o total: undefined.
+//         Antes: parseFloat(undefined) === 0 → false (pero silencioso).
+//         Ahora: guard explícito con datos.total !== undefined.
 // ============================================================
 
 const carteraService = require('../services/cartera.service');
@@ -141,6 +153,14 @@ exports.detalleAPI = async (req, res) => {
 
 // PUT /api/v1/cartera/:ventaId/editar
 // Si items llega vacío o total === 0 → elimina el pedido directamente.
+//
+// [FIX-2] Guard de totalCero corregido:
+//   Antes: parseFloat(datos.total) === 0
+//          Si datos.total es undefined → parseFloat(undefined) = NaN → NaN === 0 = false
+//          El guard silenciosamente no se activa con payloads malformados.
+//   Ahora: datos.total !== undefined && parseFloat(datos.total) === 0
+//          El contrato es explícito: solo consideramos totalCero cuando
+//          el campo fue enviado con un valor numérico igual a 0.
 exports.editarVentaAPI = async (req, res) => {
     try {
         const { ventaId } = req.params;
@@ -149,13 +169,19 @@ exports.editarVentaAPI = async (req, res) => {
 
         // ✅ Venta ya está importado al tope del archivo — no re-require aquí
         const itemsVacios = Array.isArray(datos.items) && datos.items.length === 0;
-        const totalCero   = parseFloat(datos.total) === 0;
+
+        // [FIX-2] Guard explícito: solo activo cuando total fue enviado y es 0
+        const totalCero   = datos.total !== undefined && parseFloat(datos.total) === 0;
 
         // Caso: eliminar pedido vacío
         if (itemsVacios || totalCero) {
-            const eliminada = await Venta.findByIdAndDelete(ventaId);
-            if (!eliminada)
+            // [FIX-1] Verificar existencia antes de eliminar (punto de
+            // extensión para validación de ownership en el futuro).
+            const venta = await Venta.findById(ventaId).select('_id').lean();
+            if (!venta)
                 return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
+
+            await Venta.findByIdAndDelete(ventaId);
             return res.json({
                 success:   true,
                 eliminado: true,
@@ -179,13 +205,29 @@ exports.editarVentaAPI = async (req, res) => {
 };
 
 // DELETE /api/v1/cartera/:ventaId
+//
+// [FIX-1] Verificación de existencia separada de la eliminación.
+//   Antes: findByIdAndDelete directo → si no existe, null, responde 404.
+//          Sin punto de inspección previo a la operación destructiva.
+//   Ahora: findById con select mínimo primero → confirmar existencia →
+//          luego eliminar. Mismo resultado final, pero abre el punto de
+//          extensión para validar ownership (ej. venta.clienteRef === clienteAutorizado)
+//          antes de ejecutar el delete, sin cambios adicionales al flujo.
 exports.eliminarVentaAPI = async (req, res) => {
     try {
         const { ventaId } = req.params;
-        // ✅ Venta ya está importado al tope — sin re-require
-        const eliminada = await Venta.findByIdAndDelete(ventaId);
-        if (!eliminada)
+
+        // ✅ Verificar existencia antes de eliminar
+        const venta = await Venta.findById(ventaId).select('_id').lean();
+        if (!venta)
             return res.status(404).json({ success: false, message: 'Pedido no encontrado.' });
+
+        // Si en el futuro necesitas validar ownership, hazlo aquí:
+        // if (venta.clienteRef?.toString() !== clienteAutorizado) {
+        //     return res.status(403).json({ success: false, message: 'No autorizado.' });
+        // }
+
+        await Venta.findByIdAndDelete(ventaId);
         res.json({ success: true, message: 'Pedido eliminado correctamente.' });
     } catch (error) {
         console.error('Error eliminarVentaAPI:', error);

@@ -1,10 +1,39 @@
 // ============================================================
-// src/services/cartera.service.js
+// src/services/cartera.service.js  —  AUDITADO
+// ============================================================
+// HALLAZGOS y correcciones (SIN cambios de funcionalidad):
+//
+// [FIX-1] getResumenCartera: filtros.cliente se pasaba a .replace()
+//         sin verificar que fuera string. Si el query param llegaba
+//         como objeto (e.g. ?cliente[$gt]= tras un intento de NoSQL
+//         injection), .replace() lanzaba TypeError no controlado.
+//         Corrección: String() cast defensivo antes del .replace().
+//         Comportamiento para inputs válidos: idéntico.
+//
+// [FIX-2] getDetalleCliente: clienteIdOrNombre.replace() en la rama
+//         de búsqueda por nombre sin verificar que sea string.
+//         Si se llamaba con null/undefined (error del caller),
+//         lanzaba TypeError en lugar de un mensaje controlado.
+//         Corrección: guard de tipo al inicio de la función.
+//         Comportamiento para inputs válidos: idéntico.
+//
+// [FIX-3] editarVenta: anterior.items = venta.items guardaba una
+//         REFERENCIA al subdocumento Mongoose, no una copia.
+//         Cuando venta.items se reemplazaba en la línea siguiente,
+//         el historial quedaba apuntando al array nuevo (estado
+//         POST-edición) en lugar del anterior (estado PRE-edición).
+//         Esto es un bug real: el historial de auditoría era incorrecto.
+//         Corrección: .map(it => it.toObject()) para hacer copia profunda.
+//         Comportamiento observable: el historial ahora guarda el estado
+//         REAL anterior. No rompe ninguna interfaz existente.
 // ============================================================
 
-const Venta   = require('../models/venta.model');
-const Cliente = require('../models/cliente.model');
+const Venta    = require('../models/venta.model');
+const Cliente  = require('../models/cliente.model');
 const mongoose = require('mongoose');
+
+// ── Helper interno: escapar caracteres especiales de RegExp ──────────────────
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Resumen de cartera agrupado por cliente
@@ -16,8 +45,15 @@ exports.getResumenCartera = async (filtros = {}) => {
     if (filtros.clienteId && mongoose.Types.ObjectId.isValid(filtros.clienteId)) {
         match.clienteRef = new mongoose.Types.ObjectId(filtros.clienteId);
     } else if (filtros.cliente && filtros.cliente !== '') {
+        // [FIX-1] Cast defensivo a String antes de llamar a .replace().
+        // Si filtros.cliente es un objeto (intento de NoSQL injection como
+        // ?cliente[$gt]=), String() lo convierte en "[object Object]" en
+        // lugar de lanzar TypeError. El escapeRegex lo neutraliza como
+        // texto literal, devolviendo [] (ningún cliente coincide) — respuesta
+        // segura y sin crash.
+        const nombreBuscado = escapeRegex(String(filtros.cliente));
         const clienteDoc = await Cliente
-            .findOne({ nombre: new RegExp(filtros.cliente.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') })
+            .findOne({ nombre: new RegExp(nombreBuscado, 'i') })
             .select('_id')
             .lean();
         if (clienteDoc) match.clienteRef = clienteDoc._id;
@@ -47,7 +83,6 @@ exports.getResumenCartera = async (filtros = {}) => {
                 pipeline: [{ $project: { nombre: 1, zona: 1, telefono: 1 } }]
             }
         },
-        // FIX: preserveNullAndEmptyArrays (no preserveNullAndEmpty)
         { $unwind: { path: '$clienteDoc', preserveNullAndEmptyArrays: true } },
         { $sort: { 'clienteDoc.nombre': 1 } }
     ]);
@@ -64,7 +99,6 @@ exports.getResumenCartera = async (filtros = {}) => {
         else                        { nivel = 'none'; nivelLabel = 'Sin pagos'; }
 
         return {
-            // FIX: la app móvil usa c.cliente para mostrar el nombre — incluir ambos campos
             clienteId:      c._id,
             cliente:        c.clienteDoc?.nombre || '(sin nombre)',
             nombre:         c.clienteDoc?.nombre || '(sin nombre)',
@@ -86,18 +120,31 @@ exports.getResumenCartera = async (filtros = {}) => {
 // Detalle por clienteId (ObjectId) o por nombre (string) — app usa nombre
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getDetalleCliente = async (clienteIdOrNombre) => {
+    // [FIX-2] Guard de tipo: si el caller pasa null/undefined/número,
+    // se lanza un error controlado con mensaje claro en lugar de dejar
+    // que .replace() (más abajo) lance un TypeError críptico con stack trace.
+    if (clienteIdOrNombre === null || clienteIdOrNombre === undefined) {
+        throw new Error('getDetalleCliente: se requiere un ID o nombre de cliente.');
+    }
+    // Cast a string para que mongoose.Types.ObjectId.isValid() funcione
+    // correctamente con ObjectIds enviados como strings desde la app.
+    const param = String(clienteIdOrNombre).trim();
+
     let clienteDoc;
 
-    if (mongoose.Types.ObjectId.isValid(clienteIdOrNombre)) {
+    if (mongoose.Types.ObjectId.isValid(param)) {
         // Llamada con ObjectId (web, nuevo flujo)
         clienteDoc = await Cliente
-            .findById(clienteIdOrNombre)
+            .findById(param)
             .select('nombre zona telefono notas activo')
             .lean();
     } else {
-        // FIX: llamada con nombre (app móvil — flujo legacy)
+        // Llamada con nombre (app móvil — flujo legacy)
+        // Regex anclado ^ ... $ para match exacto insensible a mayúsculas.
+        // escapeRegex evita que nombres con caracteres especiales (e.g. "S.A.")
+        // sean interpretados como patrones de regex.
         clienteDoc = await Cliente
-            .findOne({ nombre: new RegExp(`^${clienteIdOrNombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+            .findOne({ nombre: new RegExp(`^${escapeRegex(param)}$`, 'i') })
             .select('nombre zona telefono notas activo')
             .lean();
     }
@@ -116,20 +163,20 @@ exports.getDetalleCliente = async (clienteIdOrNombre) => {
         ? Math.round((totalPagado / totalFacturado) * 100) : 0;
 
     const ventasFormateadas = ventas.map(v => ({
-        _id:             v._id,
-        fecha:           v.fecha,
-        producto:        v.producto,
-        cantidad:        v.cantidad,
-        total:           v.total           ?? 0,
-        pagado:          v.totalPagado     ?? 0,
-        saldo:           Math.max(0, (v.total ?? 0) - (v.totalPagado ?? 0)),
-        estadoPago:      v.estadoPago,
-        estadoEntrega:   v.estadoEntrega,
-        tipoTransaccion: v.tipoTransaccion,
-        items:           v.items               || [],
-        cobros:          v.cobros              || [],
-        historialEdiciones: v.historialEdiciones || [],
-        ubicacion:       v.ubicacion,
+        _id:                v._id,
+        fecha:              v.fecha,
+        producto:           v.producto,
+        cantidad:           v.cantidad,
+        total:              v.total           ?? 0,
+        pagado:             v.totalPagado     ?? 0,
+        saldo:              Math.max(0, (v.total ?? 0) - (v.totalPagado ?? 0)),
+        estadoPago:         v.estadoPago,
+        estadoEntrega:      v.estadoEntrega,
+        tipoTransaccion:    v.tipoTransaccion,
+        items:              v.items               || [],
+        cobros:             v.cobros              || [],
+        historialEdiciones: v.historialEdiciones  || [],
+        ubicacion:          v.ubicacion,
     }));
 
     return {
@@ -155,11 +202,23 @@ exports.editarVenta = async (ventaId, datos, usuario = 'app') => {
     const venta = await Venta.findById(ventaId);
     if (!venta) throw new Error('Venta no encontrada');
 
+    // [FIX-3] ANTES: anterior.items = venta.items guardaba una REFERENCIA
+    // al subdocumento Mongoose. Cuando venta.items se reemplazaba en el
+    // bloque Array.isArray(datos.items) de abajo, `anterior` quedaba
+    // apuntando al array YA MODIFICADO, almacenando el estado POST-edición
+    // en el historial en lugar del PRE-edición. Bug real de auditoría.
+    //
+    // AHORA: .map(it => it.toObject()) crea objetos planos independientes
+    // (copia profunda de cada subdocumento Mongoose). Esto garantiza que
+    // `anterior` siempre refleje el estado real antes de la edición.
+    //
+    // Funcionalidad: idéntica para el caller. El campo `anterior` del
+    // historial ahora contiene lo que siempre debió contener.
     const anterior = {
         producto: venta.producto,
         cantidad: venta.cantidad,
         total:    venta.total,
-        items:    venta.items,
+        items:    venta.items.map(it => it.toObject()),
     };
 
     if (datos.producto !== undefined) venta.producto = String(datos.producto).trim();

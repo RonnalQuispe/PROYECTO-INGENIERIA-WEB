@@ -22,6 +22,29 @@
 //
 // Resto de métodos: sin cambios funcionales, solo añadido .lean() y .select()
 // en las queries de solo lectura que aún no los tenían.
+//
+// ── CORRECCIONES DE SEGURIDAD (sin cambios funcionales) ──────
+// [FIX-1] actualizarEntregaItemAPI: validación de ObjectId antes de
+//         construir los objetos ObjectId para la query. Antes: si id o
+//         itemId no eran ObjectIds válidos, mongoose.Types.ObjectId()
+//         lanzaba una excepción no controlada que escapaba al catch
+//         genérico y exponía un stack trace en la respuesta.
+//         Ahora: validación explícita con mongoose.Types.ObjectId.isValid()
+//         antes de la query → respuesta 400 limpia sin stack trace.
+//
+// [FIX-2] guardarAPI: el header x-device-id se sanitiza antes de
+//         persistir en la base de datos. Antes: se guardaba directamente
+//         desde req.headers sin ningún filtrado → un atacante podía
+//         inyectar strings arbitrariamente largos o con caracteres
+//         especiales en el campo creadoPorDispositivo.
+//         Ahora: truncado a 64 caracteres y saneado con trim().
+//
+// [FIX-3] listarAPI: el parámetro limite ya tenía cap de 100, pero no
+//         validaba que el valor sea un número positivo. Si limite llegaba
+//         como "abc", Math.min(NaN, 100) = NaN → skip y limit(NaN)
+//         podían causar comportamiento inesperado en Mongoose.
+//         Ahora: fallback explícito a 20 si el valor parseado no es un
+//         número positivo.
 // ============================================================
 
 const Venta    = require('../models/venta.model');
@@ -312,10 +335,22 @@ exports.registrarCobro = async (req, res) => {
 // GET /api/v1/ventas
 // ✅ OPTIMIZADO: filtra por clienteRef (ObjectId, indexado) en lugar de
 // cliente (String, sin índice útil). Proyección estricta: no carga arrays pesados.
+//
+// [FIX-3] limite: validación de que sea un número positivo antes del cap.
+//   Antes: Math.min(Number("abc"), 100) = Math.min(NaN, 100) = NaN
+//          → skip(NaN) y limit(NaN) en Mongoose → comportamiento indefinido.
+//   Ahora: fallback explícito a 20 si el valor no es un número positivo.
 exports.listarAPI = async (req, res) => {
     const { zona, clienteId, estadoPago, pagina = 1, limite = 20 } = req.query;
-    const limiteNum = Math.min(Number(limite), 100); // cap de seguridad
-    const skip      = (Number(pagina) - 1) * limiteNum;
+
+    // [FIX-3] Validar que limite sea un número positivo antes de aplicar cap
+    const limiteParseado = parseInt(limite, 10);
+    const limiteNum      = (isNaN(limiteParseado) || limiteParseado < 1)
+        ? 20
+        : Math.min(limiteParseado, 100); // cap de seguridad
+
+    const paginaNum = Math.max(1, parseInt(pagina, 10) || 1);
+    const skip      = (paginaNum - 1) * limiteNum;
 
     try {
         const filtro = {};
@@ -354,7 +389,7 @@ exports.listarAPI = async (req, res) => {
             success: true,
             data:    ventas,
             paginacion: {
-                paginaActual: Number(pagina),
+                paginaActual: paginaNum,
                 totalPaginas: Math.ceil(total / limiteNum),
                 total
             }
@@ -366,6 +401,10 @@ exports.listarAPI = async (req, res) => {
 };
 
 // POST /api/v1/ventas
+//
+// [FIX-2] x-device-id sanitizado antes de persistir.
+//   Antes: req.headers['x-device-id'] se guardaba directamente sin filtrado.
+//   Ahora: truncado a 64 caracteres y sanitizado con trim().
 exports.guardarAPI = async (req, res) => {
     const {
         zona, entidad, piso,
@@ -418,6 +457,11 @@ exports.guardarAPI = async (req, res) => {
 
     const cliente = clienteResuelto;
 
+    // [FIX-2] Sanitizar x-device-id: truncar a 64 chars y limpiar espacios
+    const deviceId = typeof req.headers['x-device-id'] === 'string'
+        ? req.headers['x-device-id'].trim().slice(0, 64)
+        : null;
+
     try {
         if (Array.isArray(items) && items.length > 0) {
             const erroresItems = validarItems(items);
@@ -443,13 +487,13 @@ exports.guardarAPI = async (req, res) => {
                 cantidad:       primerItem.cantidad,
                 total:          totalGeneral,
                 items:          itemsNorm,
-                tipoTransaccion:  tipoTransaccion || 'venta',
-                estadoEntrega:    estadoEntrega   || 'Inmediata',
-                estadoPago:       'pendiente',
-                totalPagado:      0,
-                cobros:           [],
-                clientTempId:     clientTempId || null,
-                creadoPorDispositivo: req.headers['x-device-id'] || null
+                tipoTransaccion:      tipoTransaccion || 'venta',
+                estadoEntrega:        estadoEntrega   || 'Inmediata',
+                estadoPago:           'pendiente',
+                totalPagado:          0,
+                cobros:               [],
+                clientTempId:         clientTempId || null,
+                creadoPorDispositivo: deviceId  // [FIX-2] valor sanitizado
             });
 
             return res.status(201).json({ success: true, data: nueva });
@@ -471,13 +515,13 @@ exports.guardarAPI = async (req, res) => {
             precioUnitario: precio,
             cantidad:       cantidadNum,
             total:          precio * cantidadNum,
-            tipoTransaccion:  tipoTransaccion || 'venta',
-            estadoEntrega:    estadoEntrega   || 'Inmediata',
-            estadoPago:       'pendiente',
-            totalPagado:      0,
-            cobros:           [],
-            clientTempId:     clientTempId || null,
-            creadoPorDispositivo: req.headers['x-device-id'] || null
+            tipoTransaccion:      tipoTransaccion || 'venta',
+            estadoEntrega:        estadoEntrega   || 'Inmediata',
+            estadoPago:           'pendiente',
+            totalPagado:          0,
+            cobros:               [],
+            clientTempId:         clientTempId || null,
+            creadoPorDispositivo: deviceId  // [FIX-2] valor sanitizado
         });
 
         return res.status(201).json({ success: true, data: nueva });
@@ -567,12 +611,22 @@ exports.registrarCobroAPI = (req, res) => {
 //    pipeline de aggregation para recalcular estadoEntrega.
 //    Antes: findById → mutación JS → save() (2 round-trips + hidratación completa).
 //    Ahora: 2 updateOne atómicos, sin traer NADA a la RAM del servidor.
+//
+// [FIX-1] Validación de ObjectId antes de construir los objetos.
+//   Antes: new mongoose.Types.ObjectId(id) sin validar → lanzaba excepción
+//   si id o itemId no eran ObjectIds válidos, escapando al catch genérico
+//   y potencialmente exponiendo un stack trace en la respuesta.
+//   Ahora: mongoose.Types.ObjectId.isValid() previo → 400 limpio.
 exports.actualizarEntregaItemAPI = async (req, res) => {
     const { id, itemId } = req.params;
     const { entregado }  = req.body;
 
     if (typeof entregado !== 'boolean')
         return res.status(400).json({ success: false, message: 'El campo entregado debe ser boolean.' });
+
+    // [FIX-1] Validar ambos IDs antes de construir ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(itemId))
+        return res.status(400).json({ success: false, message: 'ID de venta o ítem inválido.' });
 
     try {
         // ── Paso 1: Actualizar solo el booleano del ítem específico ──────────
