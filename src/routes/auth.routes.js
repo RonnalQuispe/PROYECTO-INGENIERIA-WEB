@@ -69,8 +69,13 @@ router.get('/login', authCtrl.mostrarLogin);
 // [FIX-1] loginLimiter aplicado SOLO al POST para no penalizar la vista GET
 router.post('/login',  loginLimiter, authCtrl.procesarLogin);
 
-router.get('/logout',  authCtrl.logout);
-router.get('/inicio',  isLoggedIn, authCtrl.mostrarInicio);
-router.get('/setup',   authCtrl.crearUsuario);
+router.get('/logout', authCtrl.logout);
+router.get('/inicio', isLoggedIn, authCtrl.mostrarInicio);
+
+// [FIX] /setup solo existe en desarrollo. En producción esta ruta no se
+// registra — no es descubrible por scanners ni responde nada.
+if (process.env.NODE_ENV === 'development') {
+    router.get('/setup', authCtrl.crearUsuario);
+}
 
 module.exports = router;
