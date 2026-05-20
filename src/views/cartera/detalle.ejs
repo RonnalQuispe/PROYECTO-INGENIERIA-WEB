@@ -6,261 +6,214 @@
     <title><%= titulo %></title>
     <link rel="stylesheet" href="/css/styleIndex.css">
     <link rel="stylesheet" href="/css/styleApp.css">
-    <link rel="stylesheet" href="/css/cartera.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .cliente-header   { display:flex; align-items:flex-start; gap:20px; background:#fff; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .cliente-avatar   { width:60px; height:60px; border-radius:50%; background:#2c3e50; color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold; flex-shrink:0; }
+        .cliente-info     { flex:1; }
+        .cliente-info h1  { margin:0 0 6px; font-size:22px; color:#2c3e50; }
+        .cliente-info p   { margin:0; color:#7f8c8d; font-size:14px; }
+
+        .kpis-fila        { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+        .kpi-card         { flex:1; min-width:130px; background:#fff; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .kpi-card .val    { font-size:22px; font-weight:bold; color:#2c3e50; }
+        .kpi-card .lbl    { font-size:12px; color:#95a5a6; margin-top:4px; }
+        .kpi-card.ok .val { color:#27ae60; }
+        .kpi-card.warn .val{ color:#e74c3c; }
+
+        .section-card     { background:#fff; border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .section-card h2  { margin:0 0 16px; font-size:16px; color:#2c3e50; display:flex; align-items:center; gap:8px; }
+
+        .pedidos-table    { width:100%; border-collapse:collapse; font-size:14px; }
+        .pedidos-table th { background:#f8f9fa; padding:10px 12px; text-align:left; color:#7f8c8d; font-size:12px; border-bottom:2px solid #e9ecef; }
+        .pedidos-table td { padding:10px 12px; border-bottom:1px solid #f0f0f0; color:#374151; }
+        .pedidos-table tr:last-child td { border-bottom:none; }
+        .pedidos-table .money { font-weight:600; color:#2c3e50; }
+
+        .badge-pagado    { background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+        .badge-parcial   { background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+        .badge-pendiente { background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap; }
+
+        .saldo-deuda { color:#e74c3c; font-weight:600; }
+        .saldo-ok    { color:#27ae60; font-weight:600; }
+
+        .cobros-inline    { margin-top:6px; font-size:12px; color:#7f8c8d; }
+        .cobro-chip       { display:inline-block; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; border-radius:20px; padding:2px 8px; margin:2px; font-size:11px; }
+
+        .alert-success { background:#d1fae5; color:#065f46; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+        .alert-error   { background:#fee2e2; color:#991b1b; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+
+        .items-accordion { margin-top:8px; }
+        .items-toggle    { background:none; border:none; color:#3b82f6; cursor:pointer; font-size:12px; text-decoration:underline; padding:0; }
+        .items-panel     { display:none; margin-top:6px; background:#f8fafc; border-radius:6px; padding:8px 12px; font-size:12px; }
+        .items-panel.open{ display:block; }
+        .item-row        { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #e2e8f0; }
+        .item-row:last-child { border-bottom:none; }
+    </style>
 </head>
 <body class="app-body">
 
     <%- include('../partials/navbar') -%>
 
-    <main class="app-main" id="main-content">
+    <main class="app-main">
         <div class="container">
 
-            <!-- ── Volver ── -->
-            <a href="/cartera" class="back-link">
-                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                <span>Volver a Cartera</span>
+            <a href="/cartera" style="display:inline-flex;align-items:center;gap:6px;color:#3498db;text-decoration:none;margin-bottom:16px;font-size:14px;">
+                <i class="fa-solid fa-arrow-left"></i> Volver a cartera
             </a>
 
+            <% if (mensajeExito) { %>
+            <div class="alert-success"><i class="fa-solid fa-circle-check"></i> <%= mensajeExito %></div>
+            <% } %>
+            <% if (mensajeError) { %>
+            <div class="alert-error"><i class="fa-solid fa-triangle-exclamation"></i> <%= mensajeError %></div>
+            <% } %>
+
             <%
-                const iniciales = resumen.cliente.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
-                const barClass  = resumen.pctPagado >= 100 ? '' : resumen.pctPagado >= 60 ? 'med' : 'low';
-                const pendientes = resumen.ventas.filter(v => v.estadoPago !== 'pagado');
-                const pagadas    = resumen.ventas.filter(v => v.estadoPago === 'pagado');
-                const totalDeuda = pendientes.reduce((s, v) => s + v.saldo, 0);
-                const totalCobrado = pagadas.reduce((s, v) => s + v.pagado, 0);
+                const iniciales = resumen.cliente.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
             %>
 
-            <!-- ── Header del cliente ── -->
-            <header class="cliente-header">
-
-                <div class="cliente-avatar" aria-hidden="true"><%= iniciales %></div>
-
+            <!-- Header cliente -->
+            <div class="cliente-header">
+                <div class="cliente-avatar"><%= iniciales %></div>
                 <div class="cliente-info">
                     <h1><%= resumen.cliente %></h1>
                     <p>
+                        <% if (resumen.zona) { %>
                         <span class="badge badge-<%= resumen.zona.toLowerCase() %>"><%= resumen.zona %></span>
                         &nbsp;·&nbsp;
-                        <span><%= resumen.totalPedidos %> pedido(s) registrado(s)</span>
+                        <% } %>
+                        <% if (resumen.telefono) { %>
+                        <i class="fa-solid fa-phone"></i> <%= resumen.telefono %>
+                        &nbsp;·&nbsp;
+                        <% } %>
+                        <strong><%= resumen.totalPedidos %></strong> pedido(s) registrados
                     </p>
-                    <div class="progress-global-wrap"
-                         role="progressbar"
-                         aria-valuenow="<%= resumen.pctPagado %>"
-                         aria-valuemin="0"
-                         aria-valuemax="100"
-                         aria-label="<%= resumen.pctPagado %>% del total facturado cobrado">
-                        <div class="progress-global-bar <%= barClass %>"
-                             data-pct="<%= Math.min(resumen.pctPagado, 100) %>">
-                        </div>
-                    </div>
-                    <span class="pct-text"><%= resumen.pctPagado %>% pagado del total facturado</span>
+                    <% if (resumen.notas) { %>
+                    <p style="margin-top:6px;font-style:italic;"><%= resumen.notas %></p>
+                    <% } %>
                 </div>
-
-                <div class="cliente-kpis">
-                    <div class="ckpi">
-                        <p class="cv">$<%= resumen.totalFacturado.toFixed(2) %></p>
-                        <p class="cl">Facturado</p>
-                    </div>
-                    <div class="ckpi">
-                        <p class="cv cv-cobrado">$<%= resumen.totalPagado.toFixed(2) %></p>
-                        <p class="cl">Cobrado</p>
-                    </div>
-                    <div class="ckpi">
-                        <p class="cv <%= resumen.saldoPendiente > 0 ? 'cv-deuda' : 'cv-ok' %>">
-                            $<%= resumen.saldoPendiente.toFixed(2) %>
-                        </p>
-                        <p class="cl">Pendiente</p>
-                    </div>
-                </div>
-
-            </header>
-
-            <!-- ── Facturas pendientes ── -->
-            <% if (pendientes.length > 0) { %>
-            <section aria-label="Facturas pendientes de <%= resumen.cliente %>">
-                <div class="section-card">
-                    <header class="section-card-header">
-                        <h2>
-                            <i class="fa-solid fa-clock icon-warn" aria-hidden="true"></i>
-                            Facturas pendientes (<%= pendientes.length %>)
-                        </h2>
-                        <span class="header-total-deuda">
-                            Saldo total: $<%= totalDeuda.toFixed(2) %>
-                        </span>
-                    </header>
-
-                    <div class="table-responsive">
-                        <table class="det-table">
-                            <caption class="sr-only">Facturas pendientes de pago de <%= resumen.cliente %></caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Fecha</th>
-                                    <th scope="col">Producto</th>
-                                    <th scope="col">Cant.</th>
-                                    <th scope="col">Total</th>
-                                    <th scope="col">Pagado</th>
-                                    <th scope="col">Saldo</th>
-                                    <th scope="col">Estado</th>
-                                    <th scope="col">Abonos</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            <% pendientes.forEach(function (v, idx) { %>
-                                <tr>
-                                    <td>
-                                        <time datetime="<%= new Date(v.fecha).toISOString().split('T')[0] %>">
-                                            <%= new Date(v.fecha).toLocaleDateString('es-EC') %>
-                                        </time>
-                                    </td>
-                                    <td><strong><%= v.producto %></strong></td>
-                                    <td><%= v.cantidad %></td>
-                                    <td>$<%= v.total.toFixed(2) %></td>
-                                    <td class="td-pagado">$<%= v.pagado.toFixed(2) %></td>
-                                    <td class="td-saldo">$<%= v.saldo.toFixed(2) %></td>
-                                    <td>
-                                        <span class="badge-<%= v.estadoPago %>">
-                                            <% if (v.estadoPago === 'parcial') { %>
-                                                <i class="fa-solid fa-clock" aria-hidden="true"></i> Parcial
-                                            <% } else { %>
-                                                <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> Pendiente
-                                            <% } %>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <% if (v.cobros.length > 0) { %>
-                                        <button
-                                            class="cobros-toggle"
-                                            aria-expanded="false"
-                                            aria-controls="cobros-p<%= idx %>"
-                                            onclick="toggleCobros('p<%= idx %>', this)">
-                                            <i class="fa-solid fa-list" aria-hidden="true"></i>
-                                            <%= v.cobros.length %> abono(s)
-                                        </button>
-                                        <div class="cobros-lista" id="cobros-p<%= idx %>" hidden>
-                                            <% v.cobros.forEach(function (c) { %>
-                                            <div class="cobro-item">
-                                                <strong>$<%= c.monto.toFixed(2) %></strong> ·
-                                                <%= c.metodo %> ·
-                                                <time datetime="<%= new Date(c.fecha).toISOString().split('T')[0] %>">
-                                                    <%= new Date(c.fecha).toLocaleDateString('es-EC') %>
-                                                </time>
-                                                <% if (c.referencia) { %> · <span><%= c.referencia %></span><% } %>
-                                            </div>
-                                            <% }) %>
-                                        </div>
-                                        <% } else { %>
-                                        <span class="sin-abonos">—</span>
-                                        <% } %>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-            <% } %>
-
-            <!-- ── Facturas pagadas ── -->
-            <% if (pagadas.length > 0) { %>
-            <section aria-label="Facturas pagadas de <%= resumen.cliente %>">
-                <div class="section-card">
-                    <header class="section-card-header">
-                        <h2>
-                            <i class="fa-solid fa-circle-check icon-ok" aria-hidden="true"></i>
-                            Facturas pagadas (<%= pagadas.length %>)
-                        </h2>
-                        <span class="header-total-ok">
-                            Total cobrado: $<%= totalCobrado.toFixed(2) %>
-                        </span>
-                    </header>
-
-                    <div class="table-responsive">
-                        <table class="det-table">
-                            <caption class="sr-only">Facturas pagadas de <%= resumen.cliente %></caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Fecha</th>
-                                    <th scope="col">Producto</th>
-                                    <th scope="col">Cant.</th>
-                                    <th scope="col">Total</th>
-                                    <th scope="col">Estado</th>
-                                    <th scope="col">Cobros</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            <% pagadas.forEach(function (v, idx) { %>
-                                <tr>
-                                    <td>
-                                        <time datetime="<%= new Date(v.fecha).toISOString().split('T')[0] %>">
-                                            <%= new Date(v.fecha).toLocaleDateString('es-EC') %>
-                                        </time>
-                                    </td>
-                                    <td><strong><%= v.producto %></strong></td>
-                                    <td><%= v.cantidad %></td>
-                                    <td>$<%= v.total.toFixed(2) %></td>
-                                    <td>
-                                        <span class="badge-pagado">
-                                            <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Pagado
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <% if (v.cobros.length > 0) { %>
-                                        <button
-                                            class="cobros-toggle"
-                                            aria-expanded="false"
-                                            aria-controls="cobros-g<%= idx %>"
-                                            onclick="toggleCobros('g<%= idx %>', this)">
-                                            <i class="fa-solid fa-list" aria-hidden="true"></i>
-                                            <%= v.cobros.length %> cobro(s)
-                                        </button>
-                                        <div class="cobros-lista" id="cobros-g<%= idx %>" hidden>
-                                            <% v.cobros.forEach(function (c) { %>
-                                            <div class="cobro-item">
-                                                <strong>$<%= c.monto.toFixed(2) %></strong> ·
-                                                <%= c.metodo %> ·
-                                                <time datetime="<%= new Date(c.fecha).toISOString().split('T')[0] %>">
-                                                    <%= new Date(c.fecha).toLocaleDateString('es-EC') %>
-                                                </time>
-                                                <% if (c.referencia) { %> · <span><%= c.referencia %></span><% } %>
-                                            </div>
-                                            <% }) %>
-                                        </div>
-                                        <% } %>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-            <% } %>
-
-            <!-- ── Sin ventas ── -->
-            <% if (resumen.ventas.length === 0) { %>
-            <div class="empty-detalle" role="status">
-                <i class="fa-solid fa-inbox" aria-hidden="true"></i>
-                <p>Este cliente no tiene ventas registradas.</p>
             </div>
-            <% } %>
+
+            <!-- KPIs -->
+            <div class="kpis-fila">
+                <div class="kpi-card">
+                    <div class="val">$<%= resumen.totalFacturado.toFixed(2) %></div>
+                    <div class="lbl">Total facturado</div>
+                </div>
+                <div class="kpi-card ok">
+                    <div class="val">$<%= resumen.totalPagado.toFixed(2) %></div>
+                    <div class="lbl">Total cobrado</div>
+                </div>
+                <div class="kpi-card <%= resumen.saldoPendiente > 0 ? 'warn' : 'ok' %>">
+                    <div class="val">$<%= resumen.saldoPendiente.toFixed(2) %></div>
+                    <div class="lbl">Saldo pendiente</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="val"><%= resumen.pctPagado %>%</div>
+                    <div class="lbl">% cobrado</div>
+                </div>
+            </div>
+
+            <!-- Pedidos -->
+            <div class="section-card">
+                <h2><i class="fa-solid fa-receipt" style="color:#3498db"></i> Historial de pedidos (<%= resumen.totalPedidos %>)</h2>
+
+                <% if (resumen.ventas.length === 0) { %>
+                <p style="color:#95a5a6;text-align:center;padding:20px 0;">Sin pedidos registrados.</p>
+                <% } else { %>
+                <div style="overflow-x:auto;">
+                    <table class="pedidos-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Producto</th>
+                                <th>Total</th>
+                                <th>Pagado</th>
+                                <th>Saldo</th>
+                                <th>Estado</th>
+                                <th>Entrega</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <% resumen.ventas.forEach(function(v) { %>
+                            <tr>
+                                <td style="white-space:nowrap;">
+                                    <%= new Date(v.fecha).toLocaleDateString('es-EC', { day:'2-digit', month:'short', year:'numeric' }) %>
+                                </td>
+                                <td>
+                                    <strong><%= v.producto %></strong>
+                                    <% if (v.items && v.items.length > 0) { %>
+                                    <div class="items-accordion">
+                                        <button class="items-toggle" onclick="toggleItems('<%= v._id %>')">
+                                            ver <%= v.items.length %> ítem(s)
+                                        </button>
+                                        <div class="items-panel" id="items-<%= v._id %>">
+                                        <% v.items.forEach(function(it) { %>
+                                            <div class="item-row">
+                                                <span><%= it.nombre %> × <%= it.cantidad %></span>
+                                                <span>$<%= (it.subtotal || it.precio * it.cantidad || 0).toFixed(2) %></span>
+                                            </div>
+                                        <% }) %>
+                                        </div>
+                                    </div>
+                                    <% } %>
+                                    <% if (v.cobros && v.cobros.length > 0) { %>
+                                    <div class="cobros-inline">
+                                    <% v.cobros.forEach(function(c) { %>
+                                        <span class="cobro-chip">$<%= c.monto.toFixed(2) %> · <%= c.metodo %></span>
+                                    <% }) %>
+                                    </div>
+                                    <% } %>
+                                </td>
+                                <td class="money">$<%= v.total.toFixed(2) %></td>
+                                <td class="money" style="color:#27ae60;">$<%= v.pagado.toFixed(2) %></td>
+                                <td class="<%= v.saldo > 0 ? 'saldo-deuda' : 'saldo-ok' %>">
+                                    $<%= v.saldo.toFixed(2) %>
+                                </td>
+                                <td>
+                                    <span class="badge-<%= v.estadoPago %>">
+                                        <% if (v.estadoPago === 'pagado') { %>✓ Pagado
+                                        <% } else if (v.estadoPago === 'parcial') { %>⏳ Parcial
+                                        <% } else { %>✗ Pendiente<% } %>
+                                    </span>
+                                </td>
+                                <td><%= v.estadoEntrega || 'Inmediata' %></td>
+                                <td style="white-space:nowrap;">
+                                    <a href="/ventas/detalle/<%= v._id %>" class="btn-edit" title="Ver detalle" style="font-size:12px;">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </a>
+                                    <a href="/ventas/editar/<%= v._id %>" class="btn-edit" title="Editar" style="font-size:12px;">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                        </tbody>
+                        <tfoot>
+                            <tr style="background:#f8f9fa;font-weight:bold;">
+                                <td colspan="2" style="padding:10px 12px;color:#7f8c8d;">TOTAL</td>
+                                <td style="padding:10px 12px;">$<%= resumen.totalFacturado.toFixed(2) %></td>
+                                <td style="padding:10px 12px;color:#27ae60;">$<%= resumen.totalPagado.toFixed(2) %></td>
+                                <td style="padding:10px 12px;<%= resumen.saldoPendiente > 0 ? 'color:#e74c3c;' : 'color:#27ae60;' %>">
+                                    $<%= resumen.saldoPendiente.toFixed(2) %>
+                                </td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <% } %>
+            </div>
 
         </div>
     </main>
 
     <script>
-    // Aplica width a las barras de progreso desde data-pct
-    document.querySelectorAll('[data-pct]').forEach(function (bar) {
-        bar.style.width = Math.min(parseFloat(bar.dataset.pct) || 0, 100) + '%';
-    });
-
-    // Toggle del historial de cobros con accesibilidad
-    function toggleCobros(id, btn) {
-        var panel = document.getElementById('cobros-' + id);
-        var abierto = !panel.hidden;
-        panel.hidden = abierto;
-        panel.classList.toggle('abierta', !abierto);
-        btn.setAttribute('aria-expanded', String(!abierto));
+    function toggleItems(id) {
+        const panel = document.getElementById('items-' + id);
+        panel.classList.toggle('open');
     }
     </script>
 

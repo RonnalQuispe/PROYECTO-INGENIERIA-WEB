@@ -34,8 +34,8 @@
         .items-table td   { padding:10px 12px; border-bottom:1px solid #f0f0f0; color:#374151; }
         .items-table tr:last-child td { border-bottom:none; }
         .items-table .subtotal { font-weight:600; color:#2c3e50; }
-        .items-table .entregado-badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#d5f5e3; color:#065f46; }
-        .items-table .pendiente-badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#f3f4f6; color:#6b7280; }
+        .entregado-badge  { font-size:11px; padding:2px 8px; border-radius:10px; background:#d5f5e3; color:#065f46; }
+        .pendiente-badge  { font-size:11px; padding:2px 8px; border-radius:10px; background:#f3f4f6; color:#6b7280; }
 
         .cobros-lista     { display:flex; flex-direction:column; gap:8px; }
         .cobro-item       { display:flex; justify-content:space-between; align-items:center; background:#f9fafb; border-radius:8px; padding:10px 14px; font-size:13px; }
@@ -44,15 +44,15 @@
 
         .historial-lista  { display:flex; flex-direction:column; gap:8px; }
         .historial-item   { background:#fffbeb; border-left:3px solid #f59e0b; border-radius:0 8px 8px 0; padding:10px 14px; font-size:13px; }
-        .historial-item .h-fecha { font-weight:600; color:#78350f; }
-        .historial-item .h-motivo{ color:#92400e; margin-top:2px; }
+        .historial-item .h-fecha  { font-weight:600; color:#78350f; }
+        .historial-item .h-motivo { color:#92400e; margin-top:2px; }
 
-        .badge-pagado     { background:#d1fae5; color:#065f46; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-        .badge-parcial    { background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-        .badge-pendiente  { background:#fee2e2; color:#991b1b; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+        .badge-pagado    { background:#d1fae5; color:#065f46; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+        .badge-parcial   { background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+        .badge-pendiente { background:#fee2e2; color:#991b1b; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
 
-        .alert-success    { background:#d1fae5; color:#065f46; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
-        .alert-error      { background:#fee2e2; color:#991b1b; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+        .alert-success { background:#d1fae5; color:#065f46; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+        .alert-error   { background:#fee2e2; color:#991b1b; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
     </style>
 </head>
 <body class="app-body">
@@ -62,7 +62,6 @@
     <main class="app-main" id="main-content">
         <div class="container">
 
-            <!-- Volver -->
             <a href="/ventas" class="back-link" style="display:inline-flex;align-items:center;gap:6px;color:#3498db;text-decoration:none;margin-bottom:16px;font-size:14px;">
                 <i class="fa-solid fa-arrow-left"></i> Volver al listado
             </a>
@@ -106,9 +105,7 @@
                     <a href="/ventas/editar/<%= venta._id %>" class="btn-primary" style="font-size:14px;">
                         <i class="fa-solid fa-pen"></i> Editar
                     </a>
-                    <a href="/ventas" class="btn-secondary" style="font-size:14px;">
-                        Volver
-                    </a>
+                    <a href="/ventas" class="btn-secondary" style="font-size:14px;">Volver</a>
                 </div>
             </div>
 
@@ -167,7 +164,7 @@
                 </div>
             </div>
 
-            <!-- Ítems multi-producto (si existen) -->
+            <!-- Ítems multi-producto -->
             <% if (venta.items && venta.items.length > 0) { %>
             <div class="section-card">
                 <h2><i class="fa-solid fa-list-ul" style="color:#8b5cf6"></i> Ítems del pedido (<%= venta.items.length %>)</h2>
@@ -237,7 +234,7 @@
             </div>
             <% } %>
 
-            <!-- Historial de ediciones (si existe) -->
+            <!-- Historial de ediciones -->
             <% if (venta.historialEdiciones && venta.historialEdiciones.length > 0) { %>
             <div class="section-card">
                 <h2><i class="fa-solid fa-clock-rotate-left" style="color:#f59e0b"></i> Historial de ediciones (<%= venta.historialEdiciones.length %>)</h2>
@@ -255,7 +252,7 @@
             </div>
             <% } %>
 
-            <!-- Acciones al pie -->
+            <!-- Acción: cobrar -->
             <% if (venta.estadoPago !== 'pagado') { %>
             <div class="section-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
                 <div>
@@ -272,7 +269,7 @@
         </div>
     </main>
 
-    <!-- ══ MODAL: REGISTRAR COBRO ══════════════════════════════════════════ -->
+    <!-- MODAL: REGISTRAR COBRO -->
     <div id="modalCobro" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;">
         <div style="background:#fff;border-radius:12px;padding:28px 32px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
             <h2 style="margin:0 0 4px;font-size:18px;"><i class="fa-solid fa-money-bill-wave" style="color:#10b981"></i> Registrar cobro</h2>
@@ -372,7 +369,6 @@
 
             if (resp.ok && data.ok) {
                 cerrarModal();
-                // Recargar con mensaje de éxito
                 window.location.href = '/ventas/detalle/' + _ventaId + '?ok=1';
             } else {
                 alert('Error: ' + (data.error || 'No se pudo registrar el cobro.'));

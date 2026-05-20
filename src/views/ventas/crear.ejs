@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AdminExpress - Nueva Venta</title>
-    
     <link rel="stylesheet" href="/css/styleApp.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -66,23 +65,22 @@
                     <div class="input-row">
                         <div class="input-group">
                             <label for="precioUnitario">Precio Unitario ($)</label>
-                            <input id="precioUnitario" name="precioUnitario" type="number" 
+                            <input id="precioUnitario" name="precioUnitario" type="number"
                                    step="0.01" min="0" placeholder="0.00" required
                                    oninput="calcularTotal()">
                         </div>
                         <div class="input-group">
                             <label for="cantidad">Cantidad</label>
-                            <input id="cantidad" name="cantidad" type="number" 
+                            <input id="cantidad" name="cantidad" type="number"
                                    min="1" placeholder="1" required
                                    oninput="calcularTotal()">
                         </div>
                     </div>
 
-                    <!-- Total (calculado automáticamente) -->
+                    <!-- Total -->
                     <div class="input-group">
                         <label for="total">Total (calculado automáticamente)</label>
                         <input id="totalMostrar" type="text" placeholder="$0.00" readonly class="input-readonly">
-                        <!-- Campo oculto que sí se envía al servidor -->
                         <input id="total" name="total" type="hidden" value="0">
                     </div>
 
@@ -99,7 +97,6 @@
     </main>
 
 <script>
-// Calcular total en el navegador antes de enviar
 function calcularTotal() {
     const precio   = parseFloat(document.getElementById('precioUnitario').value) || 0;
     const cantidad = parseInt(document.getElementById('cantidad').value)          || 0;

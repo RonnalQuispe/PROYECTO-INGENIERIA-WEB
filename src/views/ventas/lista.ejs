@@ -16,8 +16,7 @@
         .btn-cobrar:hover { background:#059669; }
         .btn-cobrar:disabled { background:#9ca3af; cursor:not-allowed; }
 
-        /* ✅ NUEVO: botón ver detalle */
-        .btn-ver     { background:#3b82f6; color:#fff; border:none; padding:5px 10px; border-radius:6px; font-size:13px; text-decoration:none; display:inline-block; }
+        .btn-ver { background:#3b82f6; color:#fff; border:none; padding:5px 10px; border-radius:6px; font-size:13px; text-decoration:none; display:inline-block; }
         .btn-ver:hover { background:#2563eb; }
 
         .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center; }
@@ -59,6 +58,9 @@
 
         .actions-cell { white-space:nowrap; }
         .actions-cell > * { margin-right:4px; margin-bottom:2px; }
+
+        .saldo-deuda { color:#e74c3c; font-weight:600; }
+        .saldo-ok    { color:#27ae60; font-weight:600; }
     </style>
 </head>
 <body class="app-body">
@@ -151,7 +153,7 @@
                                 </td>
                                 <td>
                                     <span class="badge-<%= estadoPago %>">
-                                        <% if (estadoPago === 'pagado')    { %><i class="fa-solid fa-circle-check"></i> Pagado
+                                        <% if (estadoPago === 'pagado') { %><i class="fa-solid fa-circle-check"></i> Pagado
                                         <% } else if (estadoPago === 'parcial') { %><i class="fa-solid fa-clock"></i> Parcial
                                         <% } else { %><i class="fa-solid fa-circle-xmark"></i> Pendiente<% } %>
                                     </span>
@@ -173,14 +175,9 @@
                                     <% } %>
                                 </td>
                                 <td class="actions-cell">
-                                    <!-- ✅ NUEVO: Botón Ver detalle -->
-                                    <a href="/ventas/detalle/<%= venta._id %>"
-                                       class="btn-ver"
-                                       title="Ver detalle completo">
+                                    <a href="/ventas/detalle/<%= venta._id %>" class="btn-ver" title="Ver detalle">
                                         <i class="fa-solid fa-eye"></i> Ver
                                     </a>
-
-                                    <!-- Botón cobrar (oculto si ya está pagado) -->
                                     <% if (estadoPago !== 'pagado') { %>
                                     <button class="btn-cobrar"
                                         onclick="abrirModalCobro(
@@ -224,7 +221,7 @@
         </div>
     </main>
 
-    <!-- ══ MODAL: REGISTRAR COBRO ══════════════════════════════════════════ -->
+    <!-- MODAL: REGISTRAR COBRO -->
     <div class="modal-overlay" id="modalCobro">
         <div class="modal-box">
             <h2><i class="fa-solid fa-money-bill-wave" style="color:#10b981"></i> Registrar cobro</h2>
@@ -240,8 +237,7 @@
 
             <div class="modal-field">
                 <label>Monto a cobrar ($)</label>
-                <input type="number" id="input-monto" min="0.01" step="0.01" placeholder="0.00"
-                       oninput="validarMonto()">
+                <input type="number" id="input-monto" min="0.01" step="0.01" placeholder="0.00" oninput="validarMonto()">
             </div>
             <div class="modal-field">
                 <label>Método de pago</label>
@@ -265,7 +261,7 @@
         </div>
     </div>
 
-    <!-- ══ MODAL: DOBLE CONFIRMACIÓN ═══════════════════════════════════════ -->
+    <!-- MODAL: DOBLE CONFIRMACIÓN -->
     <div class="confirm-overlay" id="confirmTotal">
         <div class="confirm-box">
             <div class="confirm-icon">✅</div>

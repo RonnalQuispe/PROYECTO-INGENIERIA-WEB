@@ -16,7 +16,7 @@
     <main class="app-main" id="main-content">
         <div class="container">
 
-            <!-- ── Encabezado de página ── -->
+            <!-- Encabezado -->
             <header class="page-header">
                 <h1><i class="fa-solid fa-wallet" aria-hidden="true"></i> Cartera de Clientes</h1>
                 <time datetime="<%= new Date().toISOString().split('T')[0] %>">
@@ -24,30 +24,30 @@
                 </time>
             </header>
 
-            <!-- ── KPIs ── -->
+            <!-- KPIs -->
             <section aria-label="Resumen financiero de cartera">
                 <div class="cartera-kpis">
 
                     <article class="kpi-c">
-                        <p class="kpi-label"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i> Total facturado</p>
+                        <p class="kpi-label"><i class="fa-solid fa-file-invoice-dollar"></i> Total facturado</p>
                         <p class="kpi-val">$<%= kpis.totalCartera.toFixed(2) %></p>
                         <p class="kpi-sub">Suma de todas las ventas</p>
                     </article>
 
                     <article class="kpi-c kpi-ok">
-                        <p class="kpi-label"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Total cobrado</p>
+                        <p class="kpi-label"><i class="fa-solid fa-circle-check"></i> Total cobrado</p>
                         <p class="kpi-val">$<%= kpis.totalCobrado.toFixed(2) %></p>
                         <p class="kpi-sub">Pagos recibidos a la fecha</p>
                     </article>
 
                     <article class="kpi-c kpi-warn">
-                        <p class="kpi-label"><i class="fa-solid fa-clock" aria-hidden="true"></i> Saldo pendiente</p>
+                        <p class="kpi-label"><i class="fa-solid fa-clock"></i> Saldo pendiente</p>
                         <p class="kpi-val">$<%= kpis.totalPendiente.toFixed(2) %></p>
                         <p class="kpi-sub">Por cobrar</p>
                     </article>
 
                     <article class="kpi-c">
-                        <p class="kpi-label"><i class="fa-solid fa-users" aria-hidden="true"></i> Clientes con deuda</p>
+                        <p class="kpi-label"><i class="fa-solid fa-users"></i> Clientes con deuda</p>
                         <p class="kpi-val"><%= kpis.clientesEnDeuda %></p>
                         <p class="kpi-sub">De <%= clientes.length %> clientes totales</p>
                     </article>
@@ -55,10 +55,10 @@
                 </div>
             </section>
 
-            <!-- ── Filtros ── -->
+            <!-- Filtros -->
             <section aria-label="Filtros de cartera">
                 <div class="filter-card">
-                    <h2><i class="fa-solid fa-filter" aria-hidden="true"></i> Filtrar cartera</h2>
+                    <h2><i class="fa-solid fa-filter"></i> Filtrar cartera</h2>
                     <form action="/cartera" method="GET" role="search">
                         <div class="filter-row">
                             <div class="fg">
@@ -82,21 +82,21 @@
                                 >
                             </div>
                             <button type="submit" class="btn-primary">
-                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Buscar
+                                <i class="fa-solid fa-magnifying-glass"></i> Buscar
                             </button>
                             <a href="/cartera" class="btn-secondary">
-                                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Limpiar
+                                <i class="fa-solid fa-rotate-left"></i> Limpiar
                             </a>
                         </div>
                     </form>
                 </div>
             </section>
 
-            <!-- ── Tabla de clientes ── -->
+            <!-- Tabla -->
             <section aria-label="Listado de clientes en cartera">
                 <% if (clientes.length === 0) { %>
                 <div class="empty-cartera" role="status">
-                    <i class="fa-solid fa-wallet" aria-hidden="true"></i>
+                    <i class="fa-solid fa-wallet"></i>
                     <p>No se encontraron clientes con esos filtros.</p>
                 </div>
                 <% } else { %>
@@ -123,7 +123,7 @@
                         %>
                             <tr>
                                 <td>
-                                    <span class="cliente-nombre"><%= c._id %></span>
+                                    <span class="cliente-nombre"><%= c.nombre || c._id %></span>
                                     <% if (c.cantidadDeudas > 0) { %>
                                     <span class="cliente-facturas-pendientes">
                                         <%= c.cantidadDeudas %> factura(s) pendiente(s)
@@ -131,7 +131,7 @@
                                     <% } %>
                                 </td>
                                 <td>
-                                    <span class="badge badge-<%= c.zona.toLowerCase() %>"><%= c.zona %></span>
+                                    <span class="badge badge-<%= (c.zona || '').toLowerCase() %>"><%= c.zona || '—' %></span>
                                 </td>
                                 <td><strong><%= c.totalPedidos %></strong></td>
                                 <td>$<%= c.totalFacturado.toFixed(2) %></td>
@@ -153,10 +153,10 @@
                                     <span class="nivel nivel-<%= c.nivel %>"><%= c.nivelLabel %></span>
                                 </td>
                                 <td>
-                                    <a href="/cartera/<%= encodeURIComponent(c._id) %>"
+                                    <a href="/cartera/<%= encodeURIComponent(c.nombre || c._id) %>"
                                        class="btn-detalle"
-                                       aria-label="Ver detalle de <%= c._id %>">
-                                        <i class="fa-solid fa-eye" aria-hidden="true"></i> Ver
+                                       aria-label="Ver detalle de <%= c.nombre || c._id %>">
+                                        <i class="fa-solid fa-eye"></i> Ver
                                     </a>
                                 </td>
                             </tr>
@@ -175,7 +175,7 @@
                 </div>
 
                 <p class="results-info">
-                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    <i class="fa-solid fa-circle-info"></i>
                     <span><%= clientes.length %> cliente(s) encontrado(s)</span>
                 </p>
 
@@ -186,7 +186,6 @@
     </main>
 
     <script>
-    // Aplica width a las barras de progreso desde data-pct (evita CSS inline con EJS)
     document.querySelectorAll('.progress-bar[data-pct]').forEach(function (bar) {
         bar.style.width = Math.min(parseFloat(bar.dataset.pct) || 0, 100) + '%';
     });

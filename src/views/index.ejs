@@ -7,72 +7,53 @@
     <link rel="stylesheet" href="/css/styleIndex.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body>
+<body class="login-body">
 
-<main class="login-wrapper">
+    <div class="login-wrapper">
+        <div class="login-card">
 
-    <!-- Panel de marca -->
-    <aside class="brand-panel">
-        <header>
-            <h1>Sistema Jalej</h1>
-            <p>Administracion de Ventas</p>
-        </header>
-    </aside>
+            <div class="login-brand">
+                <i class="fa-solid fa-boxes-stacking"></i>
+                <h1>Sistema Jalej</h1>
+                <p>Gestión de ventas y cartera</p>
+            </div>
 
-    <!-- Panel del formulario -->
-    <section class="form-panel">
-        <article class="form-container">
-
-            <header>
-                <h2>Let's <span>Sign In</span> 👇</h2>
-                <p>Ingresa tus datos para acceder al sistema.</p>
-            </header>
-
-            <!-- Mensaje de error -->
             <% if (error) { %>
-                <div class="alert-error">
-                    <i class="fa-solid fa-triangle-exclamation"></i> <%= error %>
-                </div>
+            <div class="login-error">
+                <i class="fa-solid fa-triangle-exclamation"></i> <%= error %>
+            </div>
             <% } %>
 
-            <!-- action y method para enviar al servidor -->
-            <form action="/login" method="POST">
-
-                <section class="input-group">
-                    <label for="usuario">Usuario</label>
-                    <input id="usuario" name="usuario" type="text" placeholder="Ingresa tu usuario" required>
-                </section>
-
-                <section class="input-group">
-                    <label for="contrasena">Contraseña</label>
-                    <div class="password-wrapper">
-                        <input id="contrasena" name="contrasena" type="password" placeholder="Ingresa tu contraseña" required>
-                        <span id="togglePassword" onclick="togglePass()">
-                            <i class="fa-regular fa-eye" id="eyeIcon"></i>
-                        </span>
-                    </div>
-                </section>
-
-                <button type="submit" class="btn-sign-in">
-                    <i class="fa-solid fa-right-to-bracket"></i> Ingresar
+            <form action="/login" method="POST" class="login-form">
+                <div class="login-field">
+                    <label for="usuario"><i class="fa-solid fa-user"></i> Usuario</label>
+                    <input
+                        id="usuario"
+                        type="text"
+                        name="usuario"
+                        placeholder="Ingresa tu usuario"
+                        autocomplete="username"
+                        required
+                    >
+                </div>
+                <div class="login-field">
+                    <label for="contrasena"><i class="fa-solid fa-lock"></i> Contraseña</label>
+                    <input
+                        id="contrasena"
+                        type="password"
+                        name="contrasena"
+                        placeholder="Ingresa tu contraseña"
+                        autocomplete="current-password"
+                        required
+                    >
+                </div>
+                <button type="submit" class="login-btn">
+                    <i class="fa-solid fa-right-to-bracket"></i> Entrar
                 </button>
-
             </form>
 
-        </article>
-    </section>
-
-</main>
-
-<script>
-function togglePass() {
-    const input   = document.getElementById('contrasena');
-    const icon    = document.getElementById('eyeIcon');
-    const visible = input.type === 'text';
-    input.type    = visible ? 'password' : 'text';
-    icon.className = visible ? 'fa-regular fa-eye' : 'fa-regular fa-eye-slash';
-}
-</script>
+        </div>
+    </div>
 
 </body>
 </html>
