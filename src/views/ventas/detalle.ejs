@@ -7,74 +7,23 @@
     <link rel="stylesheet" href="/css/styleIndex.css">
     <link rel="stylesheet" href="/css/styleApp.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .detalle-header   { display:flex; align-items:flex-start; gap:20px; background:#fff; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
-        .detalle-avatar   { width:56px; height:56px; border-radius:50%; background:#2c3e50; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:bold; flex-shrink:0; }
-        .detalle-info     { flex:1; }
-        .detalle-info h1  { margin:0 0 6px; font-size:22px; color:#2c3e50; }
-        .detalle-info p   { margin:0; color:#7f8c8d; font-size:14px; }
-        .detalle-acciones { display:flex; gap:8px; flex-shrink:0; }
-
-        .kpis-fila        { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
-        .kpi-card         { flex:1; min-width:130px; background:#fff; border-radius:10px; padding:16px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
-        .kpi-card .val    { font-size:22px; font-weight:bold; color:#2c3e50; }
-        .kpi-card .lbl    { font-size:12px; color:#95a5a6; margin-top:4px; }
-        .kpi-card.ok .val { color:#27ae60; }
-        .kpi-card.warn .val{ color:#e74c3c; }
-
-        .section-card     { background:#fff; border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
-        .section-card h2  { margin:0 0 16px; font-size:16px; color:#2c3e50; display:flex; align-items:center; gap:8px; }
-
-        .info-grid        { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; }
-        .info-item label  { display:block; font-size:11px; color:#95a5a6; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
-        .info-item span   { font-size:14px; color:#2c3e50; font-weight:500; }
-
-        .items-table      { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
-        .items-table th   { background:#f8f9fa; padding:10px 12px; text-align:left; color:#7f8c8d; font-size:12px; border-bottom:2px solid #e9ecef; }
-        .items-table td   { padding:10px 12px; border-bottom:1px solid #f0f0f0; color:#374151; }
-        .items-table tr:last-child td { border-bottom:none; }
-        .items-table .subtotal { font-weight:600; color:#2c3e50; }
-        .entregado-badge  { font-size:11px; padding:2px 8px; border-radius:10px; background:#d5f5e3; color:#065f46; }
-        .pendiente-badge  { font-size:11px; padding:2px 8px; border-radius:10px; background:#f3f4f6; color:#6b7280; }
-
-        .cobros-lista     { display:flex; flex-direction:column; gap:8px; }
-        .cobro-item       { display:flex; justify-content:space-between; align-items:center; background:#f9fafb; border-radius:8px; padding:10px 14px; font-size:13px; }
-        .cobro-monto      { font-size:16px; font-weight:bold; color:#27ae60; }
-        .cobro-meta       { color:#7f8c8d; }
-
-        .historial-lista  { display:flex; flex-direction:column; gap:8px; }
-        .historial-item   { background:#fffbeb; border-left:3px solid #f59e0b; border-radius:0 8px 8px 0; padding:10px 14px; font-size:13px; }
-        .historial-item .h-fecha  { font-weight:600; color:#78350f; }
-        .historial-item .h-motivo { color:#92400e; margin-top:2px; }
-
-        .badge-pagado    { background:#d1fae5; color:#065f46; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-        .badge-parcial   { background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-        .badge-pendiente { background:#fee2e2; color:#991b1b; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-
-        .alert-success { background:#d1fae5; color:#065f46; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
-        .alert-error   { background:#fee2e2; color:#991b1b; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
-    </style>
 </head>
 <body class="app-body">
 
     <%- include('../partials/navbar') -%>
 
-    <main class="app-main" id="main-content">
+    <main class="app-main">
         <div class="container">
 
-            <a href="/ventas" class="back-link" style="display:inline-flex;align-items:center;gap:6px;color:#3498db;text-decoration:none;margin-bottom:16px;font-size:14px;">
+            <a href="/ventas" class="back-link">
                 <i class="fa-solid fa-arrow-left"></i> Volver al listado
             </a>
 
             <% if (mensaje) { %>
-            <div class="alert-success">
-                <i class="fa-solid fa-circle-check"></i> <%= mensaje %>
-            </div>
+            <div class="alert-success"><i class="fa-solid fa-circle-check"></i> <%= mensaje %></div>
             <% } %>
             <% if (error) { %>
-            <div class="alert-error">
-                <i class="fa-solid fa-triangle-exclamation"></i> <%= error %>
-            </div>
+            <div class="alert-error"><i class="fa-solid fa-triangle-exclamation"></i> <%= error %></div>
             <% } %>
 
             <%
@@ -90,9 +39,7 @@
                     <p>
                         <span class="badge badge-<%= venta.zona.toLowerCase() %>"><%= venta.zona %></span>
                         &nbsp;·&nbsp;
-                        <time datetime="<%= new Date(venta.fecha).toISOString().split('T')[0] %>">
-                            <%= new Date(venta.fecha).toLocaleDateString('es-EC', { year:'numeric', month:'long', day:'numeric' }) %>
-                        </time>
+                        <time><%= new Date(venta.fecha).toLocaleDateString('es-EC', { year:'numeric', month:'long', day:'numeric' }) %></time>
                         &nbsp;·&nbsp;
                         <span class="badge-<%= venta.estadoPago %>">
                             <% if (venta.estadoPago === 'pagado') { %><i class="fa-solid fa-circle-check"></i> Pagado
@@ -102,82 +49,52 @@
                     </p>
                 </div>
                 <div class="detalle-acciones">
-                    <a href="/ventas/editar/<%= venta._id %>" class="btn-primary" style="font-size:14px;">
+                    <a href="/ventas/editar/<%= venta._id %>" class="btn-primary">
                         <i class="fa-solid fa-pen"></i> Editar
                     </a>
-                    <a href="/ventas" class="btn-secondary" style="font-size:14px;">Volver</a>
+                    <a href="/ventas" class="btn-secondary">Volver</a>
                 </div>
             </div>
 
             <!-- KPIs -->
             <div class="kpis-fila">
-                <div class="kpi-card">
+                <div class="kpi-mini">
                     <div class="val">$<%= venta.total.toFixed(2) %></div>
                     <div class="lbl">Total facturado</div>
                 </div>
-                <div class="kpi-card ok">
+                <div class="kpi-mini ok">
                     <div class="val">$<%= (venta.totalPagado || 0).toFixed(2) %></div>
                     <div class="lbl">Total cobrado</div>
                 </div>
-                <div class="kpi-card <%= saldo > 0 ? 'warn' : 'ok' %>">
+                <div class="kpi-mini <%= saldo > 0 ? 'warn' : 'ok' %>">
                     <div class="val">$<%= saldo.toFixed(2) %></div>
                     <div class="lbl">Saldo pendiente</div>
                 </div>
             </div>
 
             <!-- Información general -->
-            <div class="section-card">
+            <div class="venta-section">
                 <h2><i class="fa-solid fa-circle-info" style="color:#3498db"></i> Información general</h2>
                 <div class="info-grid">
-                    <div class="info-item">
-                        <label>Producto</label>
-                        <span><%= venta.producto %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Cantidad</label>
-                        <span><%= venta.cantidad %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Precio unitario</label>
-                        <span>$<%= venta.precioUnitario.toFixed(2) %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Zona</label>
-                        <span><%= venta.zona %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Entidad / Edificio</label>
-                        <span><%= venta.ubicacion?.entidad || '—' %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Piso</label>
-                        <span><%= venta.ubicacion?.piso || '—' %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Tipo</label>
-                        <span><%= venta.tipoTransaccion || 'venta' %></span>
-                    </div>
-                    <div class="info-item">
-                        <label>Estado de entrega</label>
-                        <span><%= venta.estadoEntrega || 'Inmediata' %></span>
-                    </div>
+                    <div class="info-item"><label>Producto</label><span><%= venta.producto %></span></div>
+                    <div class="info-item"><label>Cantidad</label><span><%= venta.cantidad %></span></div>
+                    <div class="info-item"><label>Precio unitario</label><span>$<%= venta.precioUnitario.toFixed(2) %></span></div>
+                    <div class="info-item"><label>Zona</label><span><%= venta.zona %></span></div>
+                    <div class="info-item"><label>Entidad / Edificio</label><span><%= venta.ubicacion?.entidad || '—' %></span></div>
+                    <div class="info-item"><label>Piso</label><span><%= venta.ubicacion?.piso || '—' %></span></div>
+                    <div class="info-item"><label>Tipo</label><span><%= venta.tipoTransaccion || 'venta' %></span></div>
+                    <div class="info-item"><label>Estado de entrega</label><span><%= venta.estadoEntrega || 'Inmediata' %></span></div>
                 </div>
             </div>
 
             <!-- Ítems multi-producto -->
             <% if (venta.items && venta.items.length > 0) { %>
-            <div class="section-card">
+            <div class="venta-section">
                 <h2><i class="fa-solid fa-list-ul" style="color:#8b5cf6"></i> Ítems del pedido (<%= venta.items.length %>)</h2>
-                <div class="table-responsive">
+                <div class="table-wrapper">
                     <table class="items-table">
                         <thead>
-                            <tr>
-                                <th>Producto</th>
-                                <th>Cantidad</th>
-                                <th>Precio unit.</th>
-                                <th>Subtotal</th>
-                                <th>Entrega</th>
-                            </tr>
+                            <tr><th>Producto</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th><th>Entrega</th></tr>
                         </thead>
                         <tbody>
                         <% venta.items.forEach(function(it) { %>
@@ -210,7 +127,7 @@
 
             <!-- Cobros registrados -->
             <% if (venta.cobros && venta.cobros.length > 0) { %>
-            <div class="section-card">
+            <div class="venta-section">
                 <h2><i class="fa-solid fa-money-bill-wave" style="color:#10b981"></i> Cobros registrados (<%= venta.cobros.length %>)</h2>
                 <div class="cobros-lista">
                 <% venta.cobros.forEach(function(c) { %>
@@ -225,9 +142,7 @@
                                 <% if (c.cobradoPor) { %> · Por: <%= c.cobradoPor %><% } %>
                             </span>
                         </div>
-                        <time style="font-size:12px;color:#95a5a6;" datetime="<%= new Date(c.fecha).toISOString().split('T')[0] %>">
-                            <%= new Date(c.fecha).toLocaleDateString('es-EC') %>
-                        </time>
+                        <time style="font-size:12px;color:#95a5a6;"><%= new Date(c.fecha).toLocaleDateString('es-EC') %></time>
                     </div>
                 <% }) %>
                 </div>
@@ -236,11 +151,11 @@
 
             <!-- Historial de ediciones -->
             <% if (venta.historialEdiciones && venta.historialEdiciones.length > 0) { %>
-            <div class="section-card">
+            <div class="venta-section">
                 <h2><i class="fa-solid fa-clock-rotate-left" style="color:#f59e0b"></i> Historial de ediciones (<%= venta.historialEdiciones.length %>)</h2>
-                <div class="historial-lista">
+                <div class="historial-ediciones">
                 <% venta.historialEdiciones.forEach(function(h) { %>
-                    <div class="historial-item">
+                    <div class="historial-edit-item">
                         <div class="h-fecha">
                             <%= new Date(h.fecha).toLocaleDateString('es-EC', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) %>
                             <% if (h.usuario) { %>&nbsp;·&nbsp;<%= h.usuario %><% } %>
@@ -252,9 +167,9 @@
             </div>
             <% } %>
 
-            <!-- Acción: cobrar -->
+            <!-- Acción cobrar -->
             <% if (venta.estadoPago !== 'pagado') { %>
-            <div class="section-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div class="venta-section" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
                 <div>
                     <strong style="color:#2c3e50;">Saldo pendiente:</strong>
                     <span style="font-size:20px;font-weight:bold;color:#e74c3c;margin-left:8px;">$<%= saldo.toFixed(2) %></span>
@@ -270,42 +185,35 @@
     </main>
 
     <!-- MODAL: REGISTRAR COBRO -->
-    <div id="modalCobro" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:12px;padding:28px 32px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
-            <h2 style="margin:0 0 4px;font-size:18px;"><i class="fa-solid fa-money-bill-wave" style="color:#10b981"></i> Registrar cobro</h2>
-            <p id="modal-sub" style="color:#6b7280;font-size:13px;margin:0 0 20px;"></p>
-
-            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;">
-                <p style="margin:4px 0;">Total: <strong id="modal-total">$0.00</strong></p>
-                <p style="margin:4px 0;">Pagado: <strong id="modal-pagado">$0.00</strong></p>
-                <p style="margin:4px 0;">Saldo: <strong id="modal-saldo" style="color:#10b981;font-size:18px;">$0.00</strong></p>
+    <div id="modalCobro" class="modal-overlay">
+        <div class="modal-box">
+            <h2><i class="fa-solid fa-money-bill-wave" style="color:#10b981"></i> Registrar cobro</h2>
+            <p class="modal-sub" id="modal-sub"></p>
+            <div class="modal-resumen">
+                <p>Total: <strong id="modal-total">$0.00</strong></p>
+                <p>Pagado: <strong id="modal-pagado">$0.00</strong></p>
+                <p>Saldo: <span class="saldo" id="modal-saldo">$0.00</span></p>
             </div>
-
-            <p id="modal-error" style="color:#dc2626;font-size:13px;margin:0 0 12px;display:none;">El monto no puede superar el saldo pendiente.</p>
-
-            <div style="margin-bottom:14px;">
-                <label style="display:block;font-size:13px;color:#374151;margin-bottom:5px;font-weight:500;">Monto a cobrar ($)</label>
-                <input type="number" id="input-monto" min="0.01" step="0.01" placeholder="0.00"
-                       oninput="validarMonto()"
-                       style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;">
+            <p class="modal-error" id="modal-error">El monto no puede superar el saldo pendiente.</p>
+            <div class="modal-field">
+                <label>Monto a cobrar ($)</label>
+                <input type="number" id="input-monto" min="0.01" step="0.01" placeholder="0.00" oninput="validarMonto()">
             </div>
-            <div style="margin-bottom:14px;">
-                <label style="display:block;font-size:13px;color:#374151;margin-bottom:5px;font-weight:500;">Método de pago</label>
-                <select id="input-metodo" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;">
+            <div class="modal-field">
+                <label>Método de pago</label>
+                <select id="input-metodo">
                     <option value="efectivo">Efectivo</option>
                     <option value="transferencia">Transferencia</option>
                     <option value="deposito">Depósito</option>
                 </select>
             </div>
-            <div style="margin-bottom:14px;">
-                <label style="display:block;font-size:13px;color:#374151;margin-bottom:5px;font-weight:500;">Referencia <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
-                <input type="text" id="input-referencia" placeholder="Nro. transacción, comprobante..."
-                       style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;">
+            <div class="modal-field">
+                <label>Referencia <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
+                <input type="text" id="input-referencia" placeholder="Nro. transacción, comprobante...">
             </div>
-
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
-                <button onclick="cerrarModal()" style="background:none;border:1px solid #d1d5db;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:14px;">Cancelar</button>
-                <button id="btn-confirmar" onclick="ejecutarCobro()" style="background:#10b981;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn-modal-confirm" id="btn-confirmar" onclick="ejecutarCobro()">
                     <i class="fa-solid fa-check"></i> Confirmar cobro
                 </button>
             </div>
@@ -314,13 +222,9 @@
 
     <script>
     let _ventaId = '', _total = 0, _pagado = 0, _saldo = 0;
-
     function abrirModalCobro(id, cliente, producto, total, pagado) {
-        _ventaId = id;
-        _total   = parseFloat(total);
-        _pagado  = parseFloat(pagado);
+        _ventaId = id; _total = parseFloat(total); _pagado = parseFloat(pagado);
         _saldo   = Math.max(0, _total - _pagado);
-
         document.getElementById('modal-sub').textContent    = cliente + ' · ' + producto;
         document.getElementById('modal-total').textContent  = '$' + _total.toFixed(2);
         document.getElementById('modal-pagado').textContent = '$' + _pagado.toFixed(2);
@@ -329,62 +233,32 @@
         document.getElementById('input-referencia').value   = '';
         document.getElementById('modal-error').style.display = 'none';
         document.getElementById('btn-confirmar').disabled   = false;
-        document.getElementById('modalCobro').style.display = 'flex';
+        document.getElementById('modalCobro').classList.add('active');
     }
-
-    function cerrarModal() {
-        document.getElementById('modalCobro').style.display = 'none';
-    }
-
+    function cerrarModal() { document.getElementById('modalCobro').classList.remove('active'); }
     function validarMonto() {
         const monto = parseFloat(document.getElementById('input-monto').value) || 0;
-        const err   = document.getElementById('modal-error');
-        const btn   = document.getElementById('btn-confirmar');
-        if (monto <= 0 || monto > _saldo + 0.001) {
-            err.style.display = 'block';
-            btn.disabled = true;
-        } else {
-            err.style.display = 'none';
-            btn.disabled = false;
-        }
+        const ok    = monto > 0 && monto <= _saldo + 0.001;
+        document.getElementById('modal-error').style.display = ok ? 'none' : 'block';
+        document.getElementById('btn-confirmar').disabled    = !ok;
     }
-
     async function ejecutarCobro() {
-        const monto      = parseFloat(document.getElementById('input-monto').value);
-        const metodo     = document.getElementById('input-metodo').value;
+        const monto = parseFloat(document.getElementById('input-monto').value);
+        const metodo = document.getElementById('input-metodo').value;
         const referencia = document.getElementById('input-referencia').value.trim();
-        const btn        = document.getElementById('btn-confirmar');
-
-        btn.disabled = true;
-        btn.textContent = 'Guardando...';
-
+        const btn = document.getElementById('btn-confirmar');
+        btn.disabled = true; btn.textContent = 'Guardando...';
         try {
             const resp = await fetch('/ventas/cobrar/' + _ventaId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ monto, metodo, referencia })
             });
-
             const data = await resp.json();
-
-            if (resp.ok && data.ok) {
-                cerrarModal();
-                window.location.href = '/ventas/detalle/' + _ventaId + '?ok=1';
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo registrar el cobro.'));
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> Confirmar cobro';
-            }
-        } catch (e) {
-            alert('Error de conexión. Intenta de nuevo.');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Confirmar cobro';
-        }
+            if (resp.ok && data.ok) { cerrarModal(); window.location.href = '/ventas/detalle/' + _ventaId + '?ok=1'; }
+            else { alert('Error: ' + (data.error || 'No se pudo registrar.')); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Confirmar cobro'; }
+        } catch (e) { alert('Error de conexión.'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Confirmar cobro'; }
     }
-
-    document.getElementById('modalCobro').addEventListener('click', function(e) {
-        if (e.target === this) cerrarModal();
-    });
+    document.getElementById('modalCobro').addEventListener('click', e => { if (e.target === e.currentTarget) cerrarModal(); });
     </script>
 
 </body>

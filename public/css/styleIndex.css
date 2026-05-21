@@ -186,3 +186,94 @@ body {
         padding: 20px;
     }
 }
+/* ═══════════════════════════════════════════════════════════
+   LOGIN — versión simplificada (un solo panel centrado)
+   usada cuando no hay brand-panel (mobile o diseño simple)
+   ═══════════════════════════════════════════════════════════ */
+.login-body {
+    background: #f0f2f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+}
+
+.login-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100dvh;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.login-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+}
+
+.login-brand {
+    text-align: center;
+    margin-bottom: 32px;
+}
+.login-brand i   { font-size: 40px; color: var(--primary); margin-bottom: 10px; display: block; }
+.login-brand h1  { margin: 0 0 4px; font-size: 26px; color: #1a1a2e; font-weight: 700; }
+.login-brand p   { margin: 0; color: #6b7280; font-size: 14px; }
+
+.login-error {
+    background: #fff5f5;
+    border: 1px solid #feb2b2;
+    color: #dc2626;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.login-form { display: flex; flex-direction: column; gap: 0; }
+
+.login-field { margin-bottom: 18px; }
+.login-field label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.login-field input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+    background: #f9fafb;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.login-field input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245,73,39,0.1);
+    background: #fff;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 6px;
+    transition: background 0.2s;
+}
+.login-btn:hover { background: #d43d1f; }

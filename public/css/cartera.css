@@ -467,3 +467,157 @@
     .det-table th:nth-child(3),
     .det-table td:nth-child(3) { display: none; }
 }
+/* ═══════════════════════════════════════════════════════════
+   DETALLE DE CARTERA — tabla de pedidos por cliente
+   ═══════════════════════════════════════════════════════════ */
+.pedidos-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pedidos-table th { background: #f8f9fa; padding: 10px 12px; text-align: left; color: #7f8c8d; font-size: 12px; border-bottom: 2px solid #e9ecef; white-space: nowrap; }
+.pedidos-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; color: #374151; vertical-align: middle; }
+.pedidos-table tbody tr:last-child td { border-bottom: none; }
+.pedidos-table tbody tr:hover { background: #fafafa; }
+.pedidos-table tfoot td { background: #f9fafb; font-weight: 700; padding: 10px 12px; border-top: 2px solid #e5e7eb; }
+.pedidos-table .money { font-weight: 600; color: #2c3e50; }
+
+/* ── Cobros chips en detalle ────────────────────────────── */
+.cobros-inline { margin-top: 6px; }
+.cobro-chip {
+    display: inline-block;
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+    border-radius: 20px;
+    padding: 2px 8px;
+    margin: 2px;
+    font-size: 11px;
+}
+
+/* ── Acordeón de ítems ──────────────────────────────────── */
+.items-toggle {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 0;
+}
+.items-panel {
+    display: none;
+    margin-top: 6px;
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+}
+.items-panel.open { display: block; }
+.item-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid #e2e8f0;
+    color: #374151;
+}
+.item-row:last-child { border-bottom: none; }
+
+/* ── Alertas en detalle ─────────────────────────────────── */
+.alert-success {
+    background: #d1fae5;
+    color: #065f46;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+.alert-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+/* ── KPIs mini en detalle ───────────────────────────────── */
+.kpis-fila {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.kpi-mini {
+    flex: 1;
+    min-width: 130px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e5e7eb;
+}
+.kpi-mini .val     { font-size: 22px; font-weight: 700; color: #2c3e50; }
+.kpi-mini .lbl     { font-size: 12px; color: #95a5a6; margin-top: 4px; }
+.kpi-mini.ok .val  { color: #27ae60; }
+.kpi-mini.warn .val{ color: #e74c3c; }
+
+/* ── Sección card en detalle ────────────────────────────── */
+.det-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e5e7eb;
+    overflow-x: auto;
+}
+.det-section h2 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Header del cliente ─────────────────────────────────── */
+.cliente-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e5e7eb;
+    flex-wrap: wrap;
+}
+.cliente-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #F54927;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+.cliente-info     { flex: 1; }
+.cliente-info h1  { margin: 0 0 6px; font-size: 22px; color: #2c3e50; }
+.cliente-info p   { margin: 0 0 4px; color: #7f8c8d; font-size: 14px; }
+
+@media (max-width: 600px) {
+    .pedidos-table th:nth-child(6),
+    .pedidos-table td:nth-child(6),
+    .pedidos-table th:nth-child(7),
+    .pedidos-table td:nth-child(7) { display: none; }
+    .kpi-mini { min-width: calc(50% - 6px); }
+}
