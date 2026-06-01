@@ -1,195 +1,133 @@
 // ============================================================
 // src/controllers/reportes.controller.js
 // ============================================================
-// MÉTODOS WEB (sin ningún cambio):
-//   mostrarDashboard
-//
-// MÉTODOS API (nuevos al final):
-//   dashboardAPI, kpisAPI
-//
-// ── CORRECCIONES DE SEGURIDAD Y RENDIMIENTO (sin cambios funcionales) ──
-// [FIX-1] aniosDisponibles: new Date().getFullYear() se llamaba 3 veces
-//         dentro del mismo objeto literal. Aunque el impacto es mínimo
-//         por llamada, en handlers ejecutados miles de veces acumula
-//         presión innecesaria en el GC de V8 (3 objetos Date efímeros
-//         por request). Ahora se calcula una sola vez y se reutiliza.
-//         El mismo fix se aplica a dashboardAPI para consistencia.
-//
-// [FIX-2] dashboardAPI: añadido límite de seguridad al parámetro
-//         anioHistorico. Antes: req.query.anioHistorico se pasaba
-//         directamente al service sin validación. Un valor arbitrario
-//         podría causar comportamiento inesperado en el pipeline de
-//         aggregation. Ahora se valida que sea un número entero de 4
-//         dígitos; si no lo es, se usa el año actual como fallback.
-//         Sin cambio en la funcionalidad para valores válidos.
+// Usa el core de análisis de cartera (coreCartera.js) con el
+// modelo real de Venta para alimentar el dashboard.ejs
 // ============================================================
 
-const reportesService = require('../services/reportes.service');
+const Venta = require('../models/venta.model');
+const { analizarCartera } = require('../coreCartera'); // ajusta la ruta si es distinta
+
+// Umbral de liquidez semanal: cuánto necesita ingresar por semana el negocio
+const UMBRAL_SEMANAL = 200;
 
 // ─────────────────────────────────────────────────────────────
-// HELPER: validar año para evitar pasar valores arbitrarios
-// a los pipelines de aggregation del service.
-// [FIX-2] Solo afecta a dashboardAPI. mostrarDashboard no se toca.
+// GET /reportes  →  renderiza views/reportes/dashboard.ejs
 // ─────────────────────────────────────────────────────────────
-const parsearAnio = (valor) => {
-    const num = parseInt(valor, 10);
-    // Acepta años de 4 dígitos en un rango razonable
-    if (!isNaN(num) && num >= 2000 && num <= 2100) return num;
-    return new Date().getFullYear();
-};
-
-// ─────────────────────────────────────────────────────────────
-// WEB — DASHBOARD COMPLETO (renderiza EJS)
-// ─────────────────────────────────────────────────────────────
-
 exports.mostrarDashboard = async (req, res) => {
-    const filtros = {
-        mes:        req.query.mes        || '',
-        anio:       req.query.anio       || '',
-        zona:       req.query.zona       || '',
-        fechaDesde: req.query.fechaDesde || '',
-        fechaHasta: req.query.fechaHasta || ''
-    };
-    const anioHistorico = req.query.anioHistorico || new Date().getFullYear();
-
-    // [FIX-1] Calcular una sola vez para evitar 3 instancias Date efímeras
-    const anioActual = new Date().getFullYear();
-
     try {
-        const [
-            kpis,
-            ventasPorMes,
-            topProductos,
-            productosMenos,
-            ventasPorZona,
-            clientesFrecuentes,
-            topPorMesHistorico,
-            abastecimiento,
-            ventasPorDia
-        ] = await Promise.all([
-            reportesService.getKPIs(),
-            reportesService.getVentasPorMes(),
-            reportesService.getTopProductos(filtros),
-            reportesService.getProductosMenosVendidos(filtros),
-            reportesService.getVentasPorZona(filtros),
-            reportesService.getClientesFrecuentes(filtros),
-            reportesService.getTopProductosPorMesHistorico(anioHistorico),
-            reportesService.getProyeccionAbastecimiento(),
-            reportesService.getVentasPorDia(filtros)
-        ]);
 
-        res.render('reportes/dashboard', {
-            usuario: req.session.usuario,
-            titulo:  'Dashboard — Sistema Jalej',
-            kpis,
-            chartVentasMes:    JSON.stringify(ventasPorMes),
-            chartTopProductos: JSON.stringify(topProductos),
-            chartZonas:        JSON.stringify(ventasPorZona),
-            chartDias:         JSON.stringify(ventasPorDia),
-            topProductos,
-            productosMenos,
-            ventasPorZona,
-            clientesFrecuentes,
-            topPorMesHistorico,
-            abastecimiento,
-            filtros,
-            anioHistorico,
-            // [FIX-1] Una sola instancia Date reutilizada en los 3 valores
-            aniosDisponibles: [anioActual, anioActual - 1, anioActual - 2]
+        // Traer todas las ventas con los campos que necesita el core
+        // .lean() devuelve objetos JS planos (más rápido para calcular)
+        const ventas = await Venta.find({})
+            .select('cliente clienteRef fecha total totalPagado estadoPago zona cobros')
+            .lean();
+
+        // Ejecutar las 3 capas del core de análisis
+        const analisis = analizarCartera(ventas, UMBRAL_SEMANAL);
+
+        // Preparar la curva de proyección para el gráfico de barras
+        const curvaProyeccion = analisis.proyeccion.curva.map(function(s) {
+            return {
+                label:    'Sem ' + s.semana,
+                esperado: s.recaudacionEsperada,
+                umbral:   UMBRAL_SEMANAL,
+                clientes: s.clientesEsperados.join(', ') || '—'
+            };
         });
+
+        // Agregar etiqueta de nivel a cada cliente del ranking
+        const rankingRiesgo = analisis.rankingRiesgo.map(function(c) {
+            return Object.assign({}, c, {
+                nivelRiesgo: c.indiceMorosidad >= 0.7 ? 'alto'
+                           : c.indiceMorosidad >= 0.4 ? 'medio'
+                           : 'bajo'
+            });
+        });
+
+        // Saldo total pendiente de toda la cartera
+        const saldoTotalPendiente = analisis.clientes.reduce(function(sum, c) {
+            return sum + c.saldoPendiente;
+        }, 0);
+
+        // Renderizar la vista con todas las variables que necesita el dashboard
+        res.render('reportes/dashboard', {
+            titulo:              'Dashboard Analítico — Sistema Jalej',
+            usuario:             req.session ? req.session.usuario : null,
+
+            // Datos para los gráficos (leídos desde JSON en el EJS)
+            curvaProyeccion:     curvaProyeccion,
+            mapaCalor:           analisis.mapaCalorSemanal,
+            rankingRiesgo:       rankingRiesgo,
+
+            // Runway de liquidez
+            runwayDias:          analisis.proyeccion.runwayDias,
+            runwayFecha:         analisis.proyeccion.runwayFecha,
+            umbralSemanal:       UMBRAL_SEMANAL,
+
+            // KPIs rápidos
+            totalClientes:       analisis.clientes.length,
+            clientesEnRiesgo:    analisis.clientes.filter(function(c) {
+                                     return c.indiceMorosidad >= 0.7;
+                                 }).length,
+            saldoTotalPendiente: Math.round(saldoTotalPendiente * 100) / 100
+        });
+
     } catch (error) {
-        console.error('Error en Dashboard:', error);
-        res.status(500).send('Error al cargar el dashboard.');
+        console.error('[Dashboard] Error:', error);
+        res.status(500).send('Error al cargar el dashboard: ' + error.message);
     }
 };
 
-// ═════════════════════════════════════════════════════════════
-// API — MÉTODOS JSON PARA LA APP MÓVIL
-// Rutas montadas en /api/v1/reportes (ver api.routes.js)
-// ═════════════════════════════════════════════════════════════
-
 // ─────────────────────────────────────────────────────────────
-// API — GET /api/v1/reportes/dashboard
-// Query params: mes, anio, zona, fechaDesde, fechaHasta, anioHistorico, limite
-// Responde los datos esenciales del dashboard en JSON.
-// (El móvil dibuja sus propios gráficos con estos datos.)
+// API — GET /api/v1/reportes/dashboard  →  JSON para app móvil
 // ─────────────────────────────────────────────────────────────
-
 exports.dashboardAPI = async (req, res) => {
-    const filtros = {
-        mes:        req.query.mes        || '',
-        anio:       req.query.anio       || '',
-        zona:       req.query.zona       || '',
-        fechaDesde: req.query.fechaDesde || '',
-        fechaHasta: req.query.fechaHasta || ''
-    };
-
-    // [FIX-2] Validar anioHistorico antes de pasarlo al service.
-    // parsearAnio devuelve el año actual si el valor es inválido.
-    const anioHistorico = parsearAnio(req.query.anioHistorico);
-
-    // [FIX-1] Calcular una sola vez
-    const anioActual = new Date().getFullYear();
-
     try {
-        // Reutiliza exactamente los mismos services que usa mostrarDashboard
-        const [
-            kpis,
-            ventasPorMes,
-            topProductos,
-            productosMenos,
-            ventasPorZona,
-            clientesFrecuentes,
-            topPorMesHistorico,
-            abastecimiento,
-            ventasPorDia
-        ] = await Promise.all([
-            reportesService.getKPIs(),
-            reportesService.getVentasPorMes(),
-            reportesService.getTopProductos(filtros),
-            reportesService.getProductosMenosVendidos(filtros),
-            reportesService.getVentasPorZona(filtros),
-            reportesService.getClientesFrecuentes(filtros),
-            reportesService.getTopProductosPorMesHistorico(anioHistorico),
-            reportesService.getProyeccionAbastecimiento(),
-            reportesService.getVentasPorDia(filtros)
-        ]);
+        const ventas   = await Venta.find({}).select('cliente clienteRef fecha total totalPagado estadoPago zona cobros').lean();
+        const analisis = analizarCartera(ventas, UMBRAL_SEMANAL);
 
         res.json({
             success: true,
             data: {
-                kpis,
-                ventasPorMes,
-                topProductos,
-                productosMenos,
-                ventasPorZona,
-                clientesFrecuentes,
-                topPorMesHistorico,
-                abastecimiento,
-                ventasPorDia,
-                // [FIX-1] Incluido en la respuesta para que el móvil
-                // pueda construir el selector de años sin lógica propia
-                aniosDisponibles: [anioActual, anioActual - 1, anioActual - 2]
+                clientes:         analisis.clientes,
+                rankingRiesgo:    analisis.rankingRiesgo,
+                mapaCalorSemanal: analisis.mapaCalorSemanal,
+                proyeccion: {
+                    curva:       analisis.proyeccion.curva,
+                    runwayDias:  analisis.proyeccion.runwayDias,
+                    runwayFecha: analisis.proyeccion.runwayFecha
+                },
+                umbralSemanal: UMBRAL_SEMANAL
             }
         });
     } catch (error) {
-        console.error('Error dashboardAPI:', error);
+        console.error('[dashboardAPI] Error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 // ─────────────────────────────────────────────────────────────
-// API — GET /api/v1/reportes/kpis
-// Solo los KPIs: ideal para la pantalla de inicio del móvil.
-// Responde: { success, data: { totalHoy, totalMes, ... } }
+// API — GET /api/v1/reportes/kpis  →  KPIs rápidos en JSON
 // ─────────────────────────────────────────────────────────────
-
 exports.kpisAPI = async (req, res) => {
     try {
-        const kpis = await reportesService.getKPIs();
-        res.json({ success: true, data: kpis });
+        const ventas   = await Venta.find({}).select('total totalPagado estadoPago cobros cliente fecha zona').lean();
+        const analisis = analizarCartera(ventas, UMBRAL_SEMANAL);
+        const saldoTotal = analisis.clientes.reduce(function(s, c) { return s + c.saldoPendiente; }, 0);
+
+        res.json({
+            success: true,
+            data: {
+                totalClientes:       analisis.clientes.length,
+                clientesEnRiesgo:    analisis.clientes.filter(function(c) { return c.indiceMorosidad >= 0.7; }).length,
+                saldoTotalPendiente: Math.round(saldoTotal * 100) / 100,
+                runwayDias:          analisis.proyeccion.runwayDias,
+                umbralSemanal:       UMBRAL_SEMANAL
+            }
+        });
     } catch (error) {
-        console.error('Error kpisAPI:', error);
+        console.error('[kpisAPI] Error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
