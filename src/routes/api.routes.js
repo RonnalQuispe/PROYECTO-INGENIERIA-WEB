@@ -1,40 +1,4 @@
-// ============================================================
-// src/routes/api.routes.js  —  AUDITADO
-// ============================================================
-// HALLAZGOS y correcciones (SIN cambios de funcionalidad):
-//
-// [FIX-1] SEGURIDAD — Sin rate limiting en ningún endpoint de la API.
-//         ANTES: la API pública POST /auth/login era atacable con fuerza
-//         bruta ilimitada sin ninguna consecuencia para el atacante.
-//         AHORA: loginLimiter estricto (5 intentos / 15 min) sobre
-//         POST /auth/login. Los endpoints protegidos (bajo verifyJWT)
-//         tienen un apiLimiter más permisivo (300 req / 15 min) para
-//         proteger contra abusos sin impactar el uso legítimo.
-//
-// [FIX-2] SEGURIDAD — Sin cabeceras de seguridad HTTP en las respuestas.
-//         ANTES: la API respondía sin Content-Security-Policy,
-//         X-Content-Type-Options ni Referrer-Policy, exponiendo las
-//         respuestas JSON a sniffing de MIME y fugas de origen.
-//         AHORA: helmet() aplicado globalmente en este router.
-//         Nota: si helmet ya está montado en app.js/server.js,
-//         esta línea es redundante pero inocua (doble cabecera segura).
-//
-// [FIX-3] SEGURIDAD — Sin validación de Content-Type en peticiones POST/PUT.
-//         ANTES: un cliente podía enviar un body con Content-Type: text/plain
-//         y el parser de Express lo ignoraba silenciosamente, dejando el
-//         body vacío y produciendo errores difíciles de depurar.
-//         AHORA: middleware enforceJson que rechaza con 415 Unsupported
-//         Media Type cualquier POST/PUT/PATCH sin Content-Type: application/json.
-//
-// [FIX-4] ARQUITECTURA — La ruta DELETE /ventas/:id permitía eliminar
-//         ventas sin ningún log de auditoría en la capa de rutas.
-//         No se cambia la funcionalidad, pero se documenta que el controller
-//         (eliminarAPI) debe añadir registro de auditoría internamente.
-//         Issue registrado en comentario para el equipo.
-//
-// SIN CAMBIOS FUNCIONALES: todas las rutas, verbos HTTP, parámetros y
-// controladores asociados son idénticos al original.
-// ============================================================
+
 
 const express    = require('express');
 const router     = express.Router();
@@ -153,8 +117,8 @@ router.get('/cartera',                               carteraCtrl.listarAPI);
 router.get('/cartera/:cliente',                      carteraCtrl.detalleAPI);
 router.put('/cartera/:ventaId/editar',               carteraCtrl.editarVentaAPI);
 
-// ── REPORTES ──────────────────────────────────────────────────────────────────
+/* ── REPORTES ──────────────────────────────────────────────────────────────────
 router.get('/reportes/kpis',                         reportesCtrl.kpisAPI);
-router.get('/reportes/dashboard',                    reportesCtrl.dashboardAPI);
+router.get('/reportes/dashboard',                    reportesCtrl.dashboardAPI);*/
 
 module.exports = router;
