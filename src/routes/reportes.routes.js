@@ -1,4 +1,5 @@
 const express            = require('express');
+//http
 const router             = express.Router();
 const { isLoggedIn }     = require('../middleware/auth.middleware');
 const reportesController = require('../controllers/reportes.controller');
@@ -13,7 +14,7 @@ const reportesLimiter = rateLimit({
         mensaje: 'Demasiadas peticiones al dashboard. Espera un momento.'
     })
 });
-//oerden
+//orden
 router.get('/', isLoggedIn, reportesLimiter, reportesController.mostrarDashboard);
 
 module.exports = router;

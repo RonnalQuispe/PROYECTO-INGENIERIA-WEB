@@ -1,36 +1,39 @@
 
 const mongoose = require('mongoose');
 
-// ── Sub-schemas ───────────────────────────────────────────────────────────────
+// schemas 
 
 const cobroSchema = new mongoose.Schema({
-    monto:  { type: Number, required: true, min: 0 },
+    monto: { type: Number, required: true, min: 0 },
     metodo: {
-        type:     String,
+        type: String,
         required: true,
-        enum:     ['efectivo', 'transferencia', 'deposito']
+        enum: ['efectivo', 'transferencia', 'deposito']
     },
-    
+
     referencia: { type: String, trim: true, default: '', maxlength: [100, 'Referencia máximo 100 caracteres.'] },
-    fecha:      { type: Date, default: Date.now },
+    fecha: { type: Date, default: Date.now },
     cobradoPor: { type: String, trim: true, default: '', maxlength: [100, 'cobradoPor máximo 100 caracteres.'] }
 }, { _id: true });
 
+
+//luce un producto
 const itemSchema = new mongoose.Schema({
-    
-    nombre:    { type: String, required: true, trim: true, maxlength: [200, 'Nombre del ítem máximo 200 caracteres.'] },
-    cantidad:  { type: Number, required: true, min: 1 },
-    precio:    { type: Number, required: true, min: 0 },
-    subtotal:  { type: Number, required: true, min: 0 },
+
+    nombre: { type: String, required: true, trim: true, maxlength: [200, 'Nombre del ítem máximo 200 caracteres.'] },
+    cantidad: { type: Number, required: true, min: 1 },
+    precio: { type: Number, required: true, min: 0 },
+    subtotal: { type: Number, required: true, min: 0 },
     entregado: { type: Boolean, default: false }
-}, { _id: true });
+}, { _id: true });//unico
+
+
 
 const historialEdicionSchema = new mongoose.Schema({
-    fecha:   { type: Date, default: Date.now },
-    
+    fecha: { type: Date, default: Date.now },
     usuario: { type: String, default: 'app', trim: true, maxlength: [100, 'Usuario máximo 100 caracteres.'] },
-    motivo:  { type: String, default: '',    trim: true, maxlength: [300, 'Motivo máximo 300 caracteres.'] },
-    anterior: { type: mongoose.Schema.Types.Mixed }
+    motivo: { type: String, default: '', trim: true, maxlength: [300, 'Motivo máximo 300 caracteres.'] },
+    anterior: { type: mongoose.Schema.Types.Mixed }//mas flexible y guarda todo 
 }, { _id: false });
 
 // ── Schema principal ──
@@ -39,52 +42,52 @@ const ventaSchema = new mongoose.Schema({
     zona: { type: String, required: true, enum: ['Norte', 'Centro', 'Sur'] },
 
     ubicacion: {
-      
+
         entidad: { type: String, default: '', maxlength: [150, 'Entidad máximo 150 caracteres.'] },
-        piso:    { type: String, default: '', maxlength: [20,  'Piso máximo 20 caracteres.']    }
+        piso: { type: String, default: '', maxlength: [20, 'Piso máximo 20 caracteres.'] }
     },
 
-    // ── Relación por ID — OBLIGATORIA ─────────────────────────────────────────
+    // ── Relacion por ID — OBLIGATORIA ─────────────────────────────────────────
     clienteRef: {
-        type:     mongoose.Schema.Types.ObjectId,
-        ref:      'Cliente',
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Cliente',//apuntaq a cliente
         required: true
     },
 
     entidadRef: {
-        type:    mongoose.Schema.Types.ObjectId,
-        ref:     'Entidad',
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Entidad',
         default: null
     },
 
-    // ── Campo display (solo lectura) ──────────────────────────────────────────
-    // [FIX-2] maxlength en campo display de cliente
+
+
     cliente: { type: String, required: true, trim: true, maxlength: [150, 'Nombre de cliente máximo 150 caracteres.'] },
 
-    // [FIX-2] maxlength en producto
-    producto:       { type: String, required: true, trim: true, maxlength: [200, 'Producto máximo 200 caracteres.'] },
-    precioUnitario: { type: Number, required: true, min: 0 },
-    cantidad:       { type: Number, required: true, min: 1 },
-    total:          { type: Number, required: true, min: 0 },
 
-    // [FIX-1] Validadores de tamaño máximo en arrays para evitar documentos de 16 MB
+    producto: { type: String, required: true, trim: true, maxlength: [200, 'Producto máximo 200 caracteres.'] },
+    precioUnitario: { type: Number, required: true, min: 0 },
+    cantidad: { type: Number, required: true, min: 1 },
+    total: { type: Number, required: true, min: 0 },
+
+    //array de los subsquemas
     items: {
-        type:     [itemSchema],
-        default:  [],
+        type: [itemSchema],
+        default: [],
         validate: {
             validator: (v) => v.length <= 100,
-            message:   'Una venta no puede tener más de 100 ítems.'
+            message: 'Una venta no puede tener más de 100 ítems.'
         }
     },
     historialEdiciones: {
-        type:     [historialEdicionSchema],
-        default:  [],
+        type: [historialEdicionSchema],
+        default: [],
         validate: {
             validator: (v) => v.length <= 200,
-            message:   'El historial de ediciones no puede superar 200 entradas.'
+            message: 'El historial de ediciones no puede superar 200 entradas.'
         }
     },
-
+    //------------------------------
     tipoTransaccion: {
         type: String, enum: ['venta', 'pedido'], default: 'venta'
     },
@@ -92,77 +95,76 @@ const ventaSchema = new mongoose.Schema({
         type: String, enum: ['Inmediata', 'Pendiente', 'Entregado', 'Cancelado'], default: 'Inmediata'
     },
 
-    estadoPago:  { type: String, enum: ['pendiente', 'parcial', 'pagado'], default: 'pendiente' },
+    estadoPago: { type: String, enum: ['pendiente', 'parcial', 'pagado'], default: 'pendiente' },
     totalPagado: { type: Number, default: 0, min: 0 },
 
     cobros: {
-        type:     [cobroSchema],
-        default:  [],
+        type: [cobroSchema],
+        default: [],
         validate: {
             validator: (v) => v.length <= 500,
-            message:   'El registro de cobros no puede superar 500 entradas.'
+            message: 'El registro de cobros no puede superar 500 entradas.'
         }
     },
 
     fecha: { type: Date, default: Date.now },
 
-    // [FIX-3] maxlength en campos que vienen del cliente móvil
+
     clientTempId: {
-        type:      String,
-        default:   null,
+        type: String,
+        default: null,
         maxlength: [100, 'clientTempId máximo 100 caracteres.']
     },
     creadoPorDispositivo: {
-        type:      String,
-        default:   null,
+        type: String,
+        default: null,
         maxlength: [64, 'El identificador de dispositivo no puede superar 64 caracteres.']
     }
 
 }, { timestamps: true });
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ÍNDICES (conservados del original optimizado)
-// ══════════════════════════════════════════════════════════════════════════════
 
-// ① clienteRef + fecha  →  el JOIN más frecuente de toda la app
+//INDICES
+
+
 ventaSchema.index({ clienteRef: 1, fecha: -1 });
 
-// ② zona + fecha  →  lista principal filtrada por zona
+//lista principal filtrada por zona
 ventaSchema.index({ zona: 1, fecha: -1 });
 
-// ③ estadoPago + fecha  →  cartera global de deudas
+//cartera global de deudas
 ventaSchema.index({ estadoPago: 1, fecha: -1 });
 
-// ④ clientTempId  →  idempotencia offline
+//  offline MOVILE 
 ventaSchema.index({ clientTempId: 1 }, { sparse: true });
 
-// ⑤ zona + estadoPago + fecha  →  filtro combinado de listarAPI
+// filtro combinado de listarAPI
 ventaSchema.index({ zona: 1, estadoPago: 1, fecha: -1 });
 
-// ⑥ estadoEntrega + fecha  →  pedidos pendientes / vista de entregas
+//pedidos pendientes  1 asc- -1 desc
 ventaSchema.index({ estadoEntrega: 1, fecha: -1 });
 
-// ⑦ clienteRef + estadoPago  →  cartera pendiente por cliente específico
+// cartera pendiente por cliente especifico
 ventaSchema.index({ clienteRef: 1, estadoPago: 1 });
 
-// ── Virtual ───────────────────────────────────────────────────────────────────
+// ── Virtual 
 
 ventaSchema.virtual('saldoPendiente').get(function () {
     return Math.max(0, this.total - this.totalPagado);
 });
 
-
+//hook 
 ventaSchema.pre('save', function (next) {
-    if (this.totalPagado <= 0)               this.estadoPago = 'pendiente';
+    if (this.totalPagado <= 0) this.estadoPago = 'pendiente';
     else if (this.totalPagado >= this.total) {
         this.totalPagado = this.total;
-        this.estadoPago  = 'pagado';
-    } else                                   this.estadoPago = 'parcial';
+        this.estadoPago = 'pagado';
+    } else this.estadoPago = 'parcial';
 
     if (this.tipoTransaccion === 'venta') this.estadoEntrega = 'Inmediata';
-    next();
+    next();//fin hook 
 });
 
-module.exports = mongoose.model('Venta', ventaSchema);
+module.exports = mongoose.model('Venta', ventaSchema);//crea
 
 //usuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario' }

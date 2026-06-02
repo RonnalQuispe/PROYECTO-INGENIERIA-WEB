@@ -1,38 +1,3 @@
-// ============================================================
-// src/routes/cartera.routes.js  —  AUDITADO
-// ============================================================
-// HALLAZGOS y correcciones (SIN cambios de funcionalidad):
-//
-// [FIX-1] SEGURIDAD — DELETE /:ventaId sin rate limiting.
-//         ANTES: la ruta de eliminación no tenía límite. Un script
-//         podía eliminar todos los pedidos de la cartera en segundos.
-//         AHORA: writeLimiter de 30 eliminaciones / minuto — más que
-//         suficiente para cualquier uso manual, cierra la ventana de
-//         eliminación masiva automatizada.
-//
-// [FIX-2] SEGURIDAD — PUT /:ventaId/editar sin rate limiting.
-//         ANTES: las ediciones eran ilimitadas.
-//         AHORA: writeLimiter también cubre las ediciones.
-//
-// [FIX-3] ARQUITECTURA — El orden de rutas (API primero, luego Web)
-//         está documentado en el original por una buena razón: evitar
-//         que Express confunda '/api' con un nombre de cliente en
-//         GET /:cliente. Se conserva este orden y se documenta
-//         explícitamente el motivo para evitar que sea alterado
-//         accidentalmente en el futuro.
-//
-// [FIX-4] ARQUITECTURA — router.use(isLoggedIn) como guard global
-//         es correcto para rutas web. Para las rutas de la API móvil
-//         (que usan JWT, no sesión), isLoggedIn devolverá siempre
-//         redirect a /login, lo que puede confundir a la app móvil.
-//         NOTA: estas rutas web (/api, /:ventaId/editar) son un legacy
-//         que en api.routes.js ya están duplicadas con verifyJWT.
-//         Se deja isLoggedIn tal cual para no romper funcionalidad,
-//         pero se documenta el TODO para unificar en api.routes.js.
-//
-// SIN CAMBIOS FUNCIONALES: todas las rutas, verbos, parámetros y
-// controladores son idénticos al original.
-// ============================================================
 
 const express        = require('express');
 const router         = express.Router();
@@ -74,9 +39,7 @@ const writeLimiter = rateLimit({
 // Guard global: todas las rutas requieren sesión activa.
 router.use(isLoggedIn);
 
-// ── API (app móvil) — PRIMERO para que Express no las confunda con nombres ───
-// [FIX-3] Este orden NO debe cambiarse. Si GET /:cliente va antes que
-// GET /api, Express interpretará 'api' como un nombre de cliente.
+// ── API (app móvil) — 
 router.get('/api',                 carteraCtrl.listarAPI);
 
 // [FIX-1 / FIX-2] writeLimiter en rutas de escritura
@@ -84,9 +47,6 @@ router.put('/:ventaId/editar',     writeLimiter, carteraCtrl.editarVentaAPI);
 router.delete('/:ventaId',         writeLimiter, carteraCtrl.eliminarVentaAPI);
 
 // ── Web ───────────────────────────────────────────────────────────────────────
-// [FIX-4] TODO: unificar rutas de API móvil en api.routes.js (con verifyJWT)
-// y eliminar /api y /:ventaId/editar de este router para evitar la
-// ambigüedad de autenticación sesión vs. JWT.
 router.get('/',          carteraCtrl.mostrarCartera); // Resumen global
 router.get('/:cliente',  carteraCtrl.mostrarDetalle); // Detalle por cliente
 

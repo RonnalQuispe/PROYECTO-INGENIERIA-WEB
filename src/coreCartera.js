@@ -1,59 +1,82 @@
 const round = n => Math.round(n * 100) / 100;
 
+// ── Morosidad ─────────────────────────────────────────────────────────────────
+
+function lagDePago(venta) {
+    if (!venta.cobros?.length) return null;
+
+    let primerFecha = new Date(venta.cobros[0].fecha);
+    for (const c of venta.cobros) {
+        const f = new Date(c.fecha);
+        if (f < primerFecha) primerFecha = f;
+    }
+
+    const dias = Math.round((primerFecha - new Date(venta.fecha)) / 86400000);
+    return dias >= 0 ? dias : null;
+}
+
 function calcularMorosidad(ventas) {
-    // Recopila cuántos días tardó en pagar en cada venta
     const lags = [];
     for (const v of ventas) {
-        if (!v.cobros?.length) continue;
-        const primerCobro = v.cobros.sort((a, b) => new Date(a.fecha) - new Date(b.fecha))[0];
-        const diasTardados = Math.round((new Date(primerCobro.fecha) - new Date(v.fecha)) / 86400000);
-        if (diasTardados >= 0) lags.push(diasTardados);
+        const lag = lagDePago(v);
+        if (lag !== null) lags.push(lag);
     }
 
     if (!lags.length) return { indiceMorosidad: 0.5, lagPromedio: 0 };
 
-    const promedio = lags.reduce((s, d) => s + d, 0) / lags.length;
-
-    // Entre más días tarda en pagar, más alto el índice (0 = paga rápido, 1 = paga muy tarde)
-    // 30 días como referencia: si tarda 30 días el índice es 0.5
-    const indice = round(Math.min(promedio / 60, 1));
+    let suma = 0;
+    for (const d of lags) suma += d;
+    const promedio = suma / lags.length;
 
     return {
-        indiceMorosidad: indice,
-        lagPromedio: Math.round(promedio)
+        indiceMorosidad: round(Math.min(promedio / 60, 1)),
+        lagPromedio:     Math.round(promedio)
     };
 }
 
-function analizarCartera(ventas) {
-    // Agrupa las ventas por cliente
+// ── Cartera ───────────────────────────────────────────────────────────────────
+
+function saldoCliente(ventas) {
+    let total = 0;
+    for (const v of ventas) {
+        const pendiente = v.total - (v.totalPagado || 0);
+        if (pendiente > 0) total += pendiente;
+    }
+    return round(total);
+}
+
+function agruparPorCliente(ventas) {
     const grupos = {};
     for (const v of ventas) {
         if (!grupos[v.cliente]) grupos[v.cliente] = [];
         grupos[v.cliente].push(v);
     }
+    return grupos;
+}
 
-    // Por cada cliente calcula su saldo y su morosidad
-    const clientes = Object.entries(grupos).map(([nombre, vs]) => {
-        const saldo = round(vs.reduce((s, v) => s + Math.max(0, v.total - (v.totalPagado || 0)), 0));
+function analizarCartera(ventas) {
+    const grupos  = agruparPorCliente(ventas);
+    const ranking = [];
+
+    for (const nombre in grupos) {
+        const vs    = grupos[nombre];
+        const saldo = saldoCliente(vs);
+        if (saldo <= 0) continue;
+
         const { indiceMorosidad, lagPromedio } = calcularMorosidad(vs);
 
-        return {
+        ranking.push({
             nombre,
             saldoPendiente:  saldo,
             indiceMorosidad,
             lagPromedio,
-            // Riesgo = cuánto debe × qué tan mal paga
             riesgoPonderado: round(saldo * indiceMorosidad)
-        };
-    });
+        });
+    }
 
-    // Devuelve top 10: solo los que deben algo, ordenados de mayor a menor riesgo
-    return {
-        rankingRiesgo: clientes
-            .filter(c => c.saldoPendiente > 0)
-            .sort((a, b) => b.riesgoPonderado - a.riesgoPonderado)
-            .slice(0, 10)
-    };
+    ranking.sort((a, b) => b.riesgoPonderado - a.riesgoPonderado);
+
+    return { rankingRiesgo: ranking.slice(0, 10) };
 }
 
 module.exports = { analizarCartera };
