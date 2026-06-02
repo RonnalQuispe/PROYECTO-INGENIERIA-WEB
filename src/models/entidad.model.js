@@ -1,25 +1,4 @@
-// ============================================================
-// src/models/entidad.model.js  —  AUDITADO
-// ============================================================
-// HALLAZGOS vs. original (versión ya optimizada en índices):
-//
-// [FIX-1] SEGURIDAD — Mismos problemas de longitud máxima que cliente.model.
-//         nombre, tipo y notas sin maxlength → payloads arbitrarios persistidos.
-//         Ahora: maxlength coherentes con el dominio del negocio.
-//
-// [FIX-2] SEGURIDAD / INTEGRIDAD — "tipo" era un campo String libre sin
-//         ninguna restricción. Cualquier string de cualquier longitud pasaba.
-//         Si en el negocio los tipos están predefinidos, debería ser un enum.
-//         Si es libre, al menos debe tener maxlength para evitar abusos.
-//         Se aplica maxlength: 100 sin cambiar el comportamiento actual.
-//
-// [FIX-3] NOTA ARQUITECTÓNICA — Al igual que en cliente.model.js, el enum
-//         de zona incluye '' como valor válido. Se conserva por compatibilidad
-//         pero se documenta para revisión futura del equipo.
-//
-// ÍNDICES: conservados sin cambios (ya estaban correctos).
-// SIN CAMBIOS FUNCIONALES en lógica de negocio.
-// ============================================================
+
 
 const mongoose = require('mongoose');
 

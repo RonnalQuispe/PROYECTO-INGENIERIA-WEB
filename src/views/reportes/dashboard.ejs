@@ -1,250 +1,73 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        <%= titulo %>
-    </title>
+    <title><%= titulo %></title>
     <link rel="stylesheet" href="/css/styleApp.css">
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-    <script type="application/json" id="dash-data">
-        {"curvaProyeccion":<%- JSON.stringify(curvaProyeccion) %>,"mapaCalor":<%- JSON.stringify(mapaCalor) %>,"umbralSemanal":<%= umbralSemanal %>}
-    </script>
-    <script>
-        const D = JSON.parse(document.getElementById('dash-data').textContent);
-        const CP = D.curvaProyeccion, MC = D.mapaCalor, UM = D.umbralSemanal;
-    </script>
 </head>
-
 <body class="app-body">
     <%- include('../partials/navbar') -%>
-        <main class="dash-main">
-            <div class="wrap">
+    <main class="dash-main">
+        <div class="wrap">
 
-                <!-- ENCABEZADO -->
-                <header class="dash-header">
-                    <i class="fa-solid fa-brain"></i>
-                    <div>
-                        <h1>Dashboard Analítico <span class="dash-sub">Motor de Inteligencia de Cartera</span></h1>
-                    </div>
-                </header>
+            <header class="dash-header">
+                <i class="fa-solid fa-ranking-star" style="color:var(--c-danger)"></i>
+                <div>
+                    <h1>Top clientes por riesgo
+                        <span class="dash-sub">Riesgo = saldo × índice de morosidad relativa</span>
+                    </h1>
+                </div>
+            </header>
 
-                <!-- BANNER RUNWAY -->
-                <% if (runwayDias===-1) { %>
-                    <aside class="runway runway--ok">
-                        <span>✅</span>
-                        <div>
-                            <h2>Flujo de caja estable en las próximas 8 semanas</h2>
-                            <p>Recaudación proyectada supera el umbral de <strong>$<%= umbralSemanal %>/semana</strong>.
-                            </p>
-                        </div>
-                    </aside>
-                    <% } else { %>
-                        <aside class="runway">
-                            <span>⚠️</span>
-                            <div>
-                                <h2>Posible tensión de caja en <strong>
-                                        <%= runwayDias %> días
-                                    </strong></h2>
-                                <p>Recaudación esperada caería bajo <strong>$<%= umbralSemanal %>/semana</strong> el
-                                    <strong>
-                                        <%= new
-                                            Date(runwayFecha).toLocaleDateString('es-EC',{day:'numeric',month:'long'})
-                                            %>
-                                    </strong>.
-                                </p>
-                            </div>
-                        </aside>
-                        <% } %>
+            <% if (!rankingRiesgo.length) { %>
+                <p class="empty-state">Sin deudas activas.</p>
+            <% } else { %>
+                <div class="table-wrap">
+                    <table class="risk-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Cliente</th>
+                                <th>Saldo</th>
+                                <th>Morosidad</th>
+                                <th>Nivel</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% rankingRiesgo.forEach(function(c, i) { %>
+                                <% var pct = Math.min(Math.round(c.indiceMorosidad * 100), 100);
+                                   var fc  = c.nivelRiesgo === 'alto'  ? 'fill-danger'
+                                           : c.nivelRiesgo === 'medio' ? 'fill-warn'
+                                           : 'fill-ok'; %>
+                                <tr>
+                                    <td style="color:#94a3b8;font-weight:600"><%= i + 1 %></td>
+                                    <td>
+                                        <span class="risk-table__name"><%= c.nombre %></span><br>
+                                        <span class="risk-table__meta">~<%= c.lagPromedio %> días lag</span>
+                                    </td>
+                                    <td class="risk-table__saldo">$<%= c.saldoPendiente.toFixed(2) %></td>
+                                    <td>
+                                        <%= pct %>%
+                                        <span class="morosidad-bar">
+                                            <span class="morosidad-fill <%= fc %>" style="--ancho: <%= pct %>%;"></span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge--<%= c.nivelRiesgo %>">
+                                            <%= c.nivelRiesgo.toUpperCase() %>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
 
-                            <!-- KPIs -->
-                            <section class="kpi-grid">
-                                <article class="card">
-                                    <p class="kpi__label"><i class="fa-solid fa-users" style="color:var(--c-blue)"></i>
-                                        Clientes analizados</p>
-                                    <p class="kpi__value">
-                                        <%= totalClientes %>
-                                    </p>
-                                    <p class="kpi__sub">con historial de compras</p>
-                                </article>
-                                <article class="card">
-                                    <p class="kpi__label"><i class="fa-solid fa-triangle-exclamation"
-                                            style="color:var(--c-danger)"></i> En riesgo alto</p>
-                                    <p class="kpi__value" style="color:var(--c-danger)">
-                                        <%= clientesEnRiesgo %>
-                                    </p>
-                                    <p class="kpi__sub">morosidad ≥ 0.7</p>
-                                </article>
-                                <article class="card">
-                                    <p class="kpi__label"><i class="fa-solid fa-clock" style="color:var(--c-warn)"></i>
-                                        Saldo pendiente</p>
-                                    <p class="kpi__value" style="color:var(--c-warn)">$<%=
-                                            saldoTotalPendiente.toFixed(2) %>
-                                    </p>
-                                    <p class="kpi__sub">suma de deudas activas</p>
-                                </article>
-                                <article class="card">
-                                    <p class="kpi__label"><i class="fa-solid fa-calendar-week"
-                                            style="color:var(--c-ok)"></i> Umbral semanal</p>
-                                    <p class="kpi__value" style="color:var(--c-ok)">$<%= umbralSemanal %>
-                                    </p>
-                                    <p class="kpi__sub">ingreso mínimo por semana</p>
-                                </article>
-                            </section>
-
-                            <!-- PROYECCIÓN + RANKING -->
-                            <section class="section-main">
-                                <article class="card">
-                                    <h2 class="card__heading"><i class="fa-solid fa-chart-bar"
-                                            style="color:var(--c-blue)"></i> Proyección — próximas 8 semanas</h2>
-                                    <p class="card__desc">Monto esperado ponderado por morosidad. Línea roja = umbral
-                                        mínimo.</p>
-                                    <div class="chart-proyeccion" id="chart-proyeccion"></div>
-                                    <footer class="chart-legend">
-                                        <span><span class="legend-dot" style="background:var(--c-blue)"></span>≥
-                                            Umbral</span>
-                                        <span><span class="legend-dot"
-                                                style="background:var(--c-warn)"></span>Cerca</span>
-                                        <span><span class="legend-dot" style="background:var(--c-danger)"></span>Bajo
-                                            umbral</span>
-                                        <span><span class="legend-dot"
-                                                style="border:2px dashed var(--c-danger);background:none"></span>Umbral
-                                            $<%= umbralSemanal %></span>
-                                    </footer>
-                                </article>
-
-                                <article class="card">
-                                    <h2 class="card__heading"><i class="fa-solid fa-ranking-star"
-                                            style="color:var(--c-danger)"></i> Top clientes por riesgo</h2>
-                                    <p class="card__desc">Riesgo = saldo × índice de morosidad relativa.</p>
-                                    <% if (!rankingRiesgo.length) { %>
-                                        <p class="empty-state">Sin deudas activas.</p>
-                                        <% } else { %>
-                                            <div class="table-wrap">
-                                                <table class="risk-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>#</th>
-                                                            <th>Cliente</th>
-                                                            <th>Saldo</th>
-                                                            <th>Morosidad</th>
-                                                            <th>Nivel</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <% rankingRiesgo.forEach(function(c,i){ %>
-                                                            <% var pct=Math.min(Math.round(c.indiceMorosidad*100),100);
-                                                                var fc=c.nivelRiesgo==='alto'
-                                                                ?'fill-danger':c.nivelRiesgo==='medio'
-                                                                ?'fill-warn':'fill-ok'; %>
-                                                                <tr>
-                                                                    <td style="color:#94a3b8;font-weight:600">
-                                                                        <%= i+1 %>
-                                                                    </td>
-                                                                    <td>
-                                                                        <span class="risk-table__name">
-                                                                            <%= c.nombre %>
-                                                                        </span><br>
-                                                                        <span class="risk-table__meta">~<%=
-                                                                                c.lagPromedio %> días · cada <%=
-                                                                                    c.periodoCompra %> días</span>
-                                                                    </td>
-                                                                    <td class="risk-table__saldo">$<%=
-                                                                            c.saldoPendiente.toFixed(2) %>
-                                                                    </td>
-                                                                    <td>
-                                                                        <%= pct %>%
-                                                                            <span class="morosidad-bar">
-                                                                                <span class="morosidad-fill <%= fc %>"
-                                                                                    style="--ancho: <%= pct %>%;"></span>
-                                                                            </span>
-                                                                    </td>
-                                                                    <td><span class="badge badge--<%= c.nivelRiesgo %>">
-                                                                            <%= c.nivelRiesgo.toUpperCase() %>
-                                                                        </span></td>
-                                                                </tr>
-                                                                <% }) %>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            <% } %>
-                                </article>
-                            </section>
-
-                            <!-- MAPA DE CALOR + INFO DEL CORE -->
-                            <section class="section-bottom">
-                                <article class="card">
-                                    <h2 class="card__heading"><i class="fa-solid fa-fire"
-                                            style="color:var(--c-warn)"></i> Días históricos con más cobros</h2>
-                                    <p class="card__desc">Distribución por día de la semana para validar el modelo.</p>
-                                    <div class="calor-chart" id="chart-calor"></div>
-                                </article>
-                                <article class="card core-info">
-                                    <h2 class="core-info__title"><i class="fa-solid fa-microchip"
-                                            style="color:#6366f1"></i> ¿Cómo funciona el motor?</h2>
-                                    <ul class="core-info__list">
-                                        <li><strong>Capa 1 — Ritmo:</strong> Media ponderada por monto de intervalos
-                                            entre compras + volatilidad.</li>
-                                        <li><strong>Capa 2 — Morosidad:</strong> Z-score individual del último pago
-                                            contra historial propio del cliente.</li>
-                                        <li><strong>Capa 3 — Proyección:</strong> Decaimiento exponencial por morosidad
-                                            sobre ciclos repetidos de 8 semanas.</li>
-                                    </ul>
-                                    <p class="core-info__note">
-                                        <i class="fa-solid fa-circle-info" style="color:var(--c-blue)"></i>
-                                        <strong>Runway</strong>: primera semana donde la recaudación cae bajo $<%=
-                                            umbralSemanal %>/semana.
-                                    </p>
-                                </article>
-                            </section>
-
-            </div>
-        </main>
-
-        <script>
-            (function () {
-                // GRÁFICO 1 — Proyección semanal
-                var el = document.getElementById('chart-proyeccion');
-                var mx = Math.max.apply(null, CP.map(function (s) { return s.esperado; }).concat([UM])) || 1;
-                var hoy = new Date(), ds = hoy.getDay(), lu = new Date(hoy);
-                lu.setDate(hoy.getDate() + ((ds === 0) ? -6 : 1 - ds)); lu.setHours(0, 0, 0, 0);
-                var mes = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                function lbl(i) {
-                    var a = new Date(lu); a.setDate(lu.getDate() + i * 7);
-                    var b = new Date(a); b.setDate(a.getDate() + 6);
-                    return a.getMonth() !== b.getMonth()
-                        ? a.getDate() + '\u00a0' + mes[a.getMonth()] + '–' + b.getDate() + '\u00a0' + mes[b.getMonth()]
-                        : a.getDate() + '–' + b.getDate() + '\u00a0' + mes[a.getMonth()];
-                }
-                CP.forEach(function (s, i) {
-                    var h = Math.max((s.esperado / mx) * 100, 2);
-                    var cl = s.esperado >= UM ? 'bar--ok' : s.esperado >= UM * 0.7 ? 'bar--warn' : 'bar--danger';
-                    var c = document.createElement('div'); c.className = 'bar-col';
-                    c.innerHTML = '<span class="bar-col__val">$' + s.esperado.toFixed(0) + '</span>'
-                        + '<div class="bar-col__wrap"><div class="bar ' + cl + '" style="height:' + h + '%" data-tip="' + lbl(i) + ' · $' + s.esperado.toFixed(2) + '"></div></div>'
-                        + '<span class="bar-col__label">' + lbl(i) + '</span>';
-                    el.appendChild(c);
-                });
-                var ln = document.createElement('div'); ln.className = 'umbral-line';
-                ln.style.bottom = ((UM / mx) * 100) + '%'; el.appendChild(ln);
-
-                // GRÁFICO 2 — Mapa de calor
-                var ec = document.getElementById('chart-calor');
-                var mx2 = Math.max.apply(null, MC.map(function (d) { return d.monto; })) || 1;
-                MC.forEach(function (d) {
-                    var p = Math.max((d.monto / mx2) * 100, 3);
-                    var c = document.createElement('div'); c.className = 'calor-col';
-                    c.innerHTML = '<div class="calor-bar" style="height:' + p + '%;background:rgb('
-                        + Math.round(150 - p) + ',' + Math.round(180 - p * 0.5) + ',255)" title="' + d.dia + ': $' + d.monto.toFixed(2) + '"></div>'
-                        + '<span class="calor-dia">' + d.dia + '</span>';
-                    ec.appendChild(c);
-                });
-            })();
-        </script>
+        </div>
+    </main>
 </body>
-
 </html>
