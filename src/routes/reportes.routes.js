@@ -9,7 +9,7 @@ const reportesLimiter = rateLimit({
     windowMs:        60 * 1000,
     max:             60,
     standardHeaders: true,
-    legacyHeaders:   false,
+    //legacyHeaders:   false,   
     handler: (req, res) => res.status(429).render('error', {
         mensaje: 'Demasiadas peticiones al dashboard. Espera un momento.'
     })

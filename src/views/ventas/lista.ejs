@@ -12,6 +12,8 @@
 
     <%- include('../partials/navbar') %>
 
+    
+            
     <main class="app-main">
         <div class="container">
 
@@ -160,6 +162,7 @@
         </div>
     </main>
 
+    
     <!-- MODAL: REGISTRAR COBRO -->
     <div class="modal-overlay" id="modalCobro">
         <div class="modal-box">
@@ -169,6 +172,8 @@
                 <p>Total de la venta: <strong id="modal-total">$0.00</strong></p>
                 <p>Ya pagado: <strong id="modal-pagado">$0.00</strong></p>
                 <p>Saldo pendiente: <span class="saldo" id="modal-saldo">$0.00</span></p>
+                <p>morosidad: <span class="morosidad" id="modal-morosidad">0.00</span></p>
+                
             </div>
             <p class="modal-error" id="modal-error">El monto no puede superar el saldo pendiente.</p>
             <div class="modal-field">

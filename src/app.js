@@ -42,18 +42,18 @@ app.use(session({
         maxAge:   1000 * 60 * 60 * 8, // 8 horas (sin cambio)
         httpOnly: true,                // Bloquea acceso desde JS del navegador
         sameSite: 'strict',            
-        secure:   process.env.NODE_ENV === 'production' // [FIX-3] HTTPS solo en prod
+        secure:   process.env.NODE_ENV === 'production' //  HTTPS solo en prod
     }
 }));
 
-// ── Rutas ─────────────────────────────────────────────────────────────────────
+// ── Rutas ───
 app.use('/',         require('./routes/auth.routes'));
 app.use('/ventas',   require('./routes/ventas.routes'));
 app.use('/reportes', require('./routes/reportes.routes'));
 app.use('/cartera',  require('./routes/cartera.routes'));
 app.use('/api/v1',   require('./routes/api.routes'));
 
-// ── Arranque ──────────────────────────────────────────────────────────────────
+// ── Arranque ──
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Servidor corriendo en el puerto ${PORT}`);

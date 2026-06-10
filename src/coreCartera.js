@@ -34,6 +34,47 @@ function calcularMorosidad(ventas) {
     };
 }
 
+const DIAS_MORA    = 30;   
+const RECARGO_MORA = 0.10; 
+
+function analizarMorosidadVenta(venta) {
+    const saldoPendiente = Math.max(0, venta.total - (venta.totalPagado || 0));
+
+    
+    if (saldoPendiente <= 0) {
+        return {
+            diasSinPago:     0,
+            esMoroso:        false,
+            recargoPct:      0,
+            recargoMonto:    0,
+            totalConRecargo: round(venta.total)
+        };
+    }
+    const hoy          = new Date();
+    const fechaVenta   = new Date(venta.fecha);
+    const diasSinPago  = Math.max(0, Math.floor((hoy - fechaVenta) / 86400000));
+    const esMoroso     = diasSinPago > DIAS_MORA;
+    const recargoMonto = esMoroso ? round(saldoPendiente * RECARGO_MORA) : 0;
+    const totalConRecargo = round(saldoPendiente + recargoMonto);
+
+    return {
+        diasSinPago,
+        esMoroso,
+        recargoPct:      esMoroso ? RECARGO_MORA * 100 : 0,
+        recargoMonto,
+        saldoBase:       round(saldoPendiente),
+        totalConRecargo
+    };
+}
+
+console.log(analizarMorosidadVenta({
+    fecha: '2024-01-01',
+    total: 1000,
+    totalPagado: 500,
+    cobros: [
+        { fecha: '2024-02-01', monto: 500 }
+    ]
+}));    
 // ── Cartera ───────────────────────────────────────────────────────────────────
 
 function saldoCliente(ventas) {
@@ -79,4 +120,4 @@ function analizarCartera(ventas) {
     return { rankingRiesgo: ranking.slice(0, 10) };
 }
 
-module.exports = { analizarCartera };
+module.exports = { analizarCartera, analizarMorosidadVenta };

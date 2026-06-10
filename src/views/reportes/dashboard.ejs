@@ -1,83 +1,73 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        <%= titulo %>
-    </title>
+    <title><%= titulo %></title>
     <link rel="stylesheet" href="/css/styleApp.css">
     <link rel="stylesheet" href="/css/dashboard.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-
 <body class="app-body">
     <%- include('../partials/navbar') -%>
-        <main class="dash-main">
-            <div class="wrap">
+    <main class="dash-main">
+        <div class="wrap">
 
-                <header class="dash-header">
-                    <i class="fa-solid fa-ranking-star" style="color:var(--c-danger)"></i>
-                    <div>
-                        <h1>Top clientes por riesgo
-                            <span class="dash-sub">Riesgo = saldo × índice de morosidad relativa</span>
-                        </h1>
-                    </div>
-                </header>
+            <header class="dash-header">
+                <i class="fa-solid fa-ranking-star" style="color:var(--c-danger)"></i>
+                <div>
+                    <h1>Top clientes por riesgo
+                        <span class="dash-sub">Riesgo = saldo × índice de morosidad relativa</span>
+                    </h1>
+                </div>
+            </header>
 
-                <% if (!rankingRiesgo.length) { %>
-                    <p class="empty-state">Sin deudas activas.</p>
-                    <% } else { %>
-                        <div class="table-wrap">
-                            <table class="risk-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Cliente</th>
-                                        <th>Saldo</th>
-                                        <th>Morosidad</th>
-                                        <th>Nivel</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <% rankingRiesgo.forEach(function(c, i) { %>
-                                        <% var pct=Math.min(Math.round(c.indiceMorosidad * 100), 100); var
-                                            fc=c.nivelRiesgo==='alto' ? 'fill-danger' : c.nivelRiesgo==='medio'
-                                            ? 'fill-warn' : 'fill-ok' ; %>
-                                            <tr>
-                                                <td style="color:#94a3b8;font-weight:600">
-                                                    <%= i + 1 %>
-                                                </td>
-                                                <td>
-                                                    <span class="risk-table__name">
-                                                        <%= c.nombre %>
-                                                    </span><br>
-                                                    <span class="risk-table__meta">~<%= c.lagPromedio %> días lag</span>
-                                                </td>
-                                                <td class="risk-table__saldo">$<%= c.saldoPendiente.toFixed(2) %>
-                                                </td>
-                                                <td>
-                                                    <%= pct %>%
-                                                        <span class="morosidad-bar">
-                                                            <span class="morosidad-fill <%= fc %>"
-                                                                style="--ancho: <%= pct %>%;"></span>
-                                                        </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge--<%= c.nivelRiesgo %>">
-                                                        <%= c.nivelRiesgo.toUpperCase() %>
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            <% }) %>
-                                </tbody>
-                            </table>
-                        </div>
-                        <% } %>
+            <% if (!rankingRiesgo.length) { %>
+                <p class="empty-state">Sin deudas activas.</p>
+            <% } else { %>
+                <div class="table-wrap">
+                    <table class="risk-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Cliente</th>
+                                <th>Saldo</th>
+                                <th>Morosidad</th>
+                                <th>Nivel</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% rankingRiesgo.forEach(function(c, i) { %>
+                                <% var pct = Math.min(Math.round(c.indiceMorosidad * 100), 100);
+                                   var fc  = c.nivelRiesgo === 'alto'  ? 'fill-danger'
+                                           : c.nivelRiesgo === 'medio' ? 'fill-warn'
+                                           : 'fill-ok'; %>
+                                <tr>
+                                    <td style="color:#94a3b8;font-weight:600"><%= i + 1 %></td>
+                                    <td>
+                                        <span class="risk-table__name"><%= c.nombre %></span><br>
+                                        <span class="risk-table__meta">~<%= c.lagPromedio %> días lag</span>
+                                    </td>
+                                    <td class="risk-table__saldo">$<%= c.saldoPendiente.toFixed(2) %></td>
+                                    <td>
+                                        <%= pct %>%
+                                        <span class="morosidad-bar">
+                                            <span class="morosidad-fill <%= fc %>" style="--ancho: <%= pct %>%;"></span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge--<%= c.nivelRiesgo %>">
+                                            <%= c.nivelRiesgo.toUpperCase() %>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
 
-            </div>
-        </main>
+        </div>
+    </main>
 </body>
-
 </html>

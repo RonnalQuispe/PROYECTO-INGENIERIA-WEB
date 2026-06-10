@@ -1,51 +1,4 @@
-// ============================================================
-// src/controllers/ventas.controller.js  —  OPTIMIZADO
-// ============================================================
-// CAMBIOS vs. original:
-//
-// listarAPI():
-//   ❌ ANTES: filtro.cliente = new RegExp(...)  →  COLLSCAN.
-//   ✅ AHORA: filtra por clienteRef (ObjectId) si viene clienteId  →  IXSCAN.
-//   ✅ Añadida proyección estricta: no carga historialEdiciones[] ni cobros[].
-//
-// registrarCobro() y registrarCobroAPI():
-//   ❌ ANTES: findById → mutación en memoria → venta.save()  →  2 round-trips
-//     + hidratación completa del documento (incluye todos los arrays pesados).
-//   ✅ AHORA: findById con .select() mínimo para validar + updateOne atómico
-//     con $push + $set  →  1.5 round-trips, sin hidratar el documento completo.
-//
-// actualizarEntregaItemAPI():
-//   ❌ ANTES: findById → item.entregado = x → venta.save()  →  trae TODO a RAM
-//     para cambiar un solo booleano de un subdocumento.
-//   ✅ AHORA: updateOne con operador posicional $ + pipeline de aggregation
-//     para recalcular estadoEntrega de forma atómica  →  sin traer nada a RAM.
-//
-// Resto de métodos: sin cambios funcionales, solo añadido .lean() y .select()
-// en las queries de solo lectura que aún no los tenían.
-//
-// ── CORRECCIONES DE SEGURIDAD (sin cambios funcionales) ──────
-// [FIX-1] actualizarEntregaItemAPI: validación de ObjectId antes de
-//         construir los objetos ObjectId para la query. Antes: si id o
-//         itemId no eran ObjectIds válidos, mongoose.Types.ObjectId()
-//         lanzaba una excepción no controlada que escapaba al catch
-//         genérico y exponía un stack trace en la respuesta.
-//         Ahora: validación explícita con mongoose.Types.ObjectId.isValid()
-//         antes de la query → respuesta 400 limpia sin stack trace.
-//
-// [FIX-2] guardarAPI: el header x-device-id se sanitiza antes de
-//         persistir en la base de datos. Antes: se guardaba directamente
-//         desde req.headers sin ningún filtrado → un atacante podía
-//         inyectar strings arbitrariamente largos o con caracteres
-//         especiales en el campo creadoPorDispositivo.
-//         Ahora: truncado a 64 caracteres y saneado con trim().
-//
-// [FIX-3] listarAPI: el parámetro limite ya tenía cap de 100, pero no
-//         validaba que el valor sea un número positivo. Si limite llegaba
-//         como "abc", Math.min(NaN, 100) = NaN → skip y limit(NaN)
-//         podían causar comportamiento inesperado en Mongoose.
-//         Ahora: fallback explícito a 20 si el valor parseado no es un
-//         número positivo.
-// ============================================================
+
 
 const Venta    = require('../models/venta.model');
 const Cliente  = require('../models/cliente.model');
@@ -61,9 +14,6 @@ const verificarCliente = async (clienteId) => {
     if (!clienteId || !mongoose.Types.ObjectId.isValid(clienteId))
         return { ok: false, error: 'clienteId inválido o ausente. Selecciona un cliente de la lista.' };
 
-    // findById usa el índice _id automático → O(log n).
-    // .select() mínimo: solo los campos que construyen la venta.
-    // .lean() → POJO en lugar de documento Mongoose, sin hidratación.
     const cliente = await Cliente
         .findById(clienteId)
         .select('nombre zona telefono activo')
@@ -73,6 +23,39 @@ const verificarCliente = async (clienteId) => {
     if (!cliente.activo) return { ok: false, error: 'El cliente seleccionado está inactivo.' };
 
     return { ok: true, cliente };
+};
+
+const resolverClienteRef = async (clienteId, nombreCliente, zona = '') => {
+    // Caso 1: el formulario envió un ID válido → verificar que existe
+    if (clienteId && mongoose.Types.ObjectId.isValid(clienteId)) {
+        const cliente = await Cliente
+            .findById(clienteId)
+            .select('_id nombre activo')
+            .lean();
+
+        if (cliente && cliente.activo)
+            return { ok: true, clienteRef: cliente._id, nombreCliente: cliente.nombre, creado: false };
+    }
+
+    // Caso 2: buscar por nombre exacto
+    if (!nombreCliente || nombreCliente.trim().length < 2)
+        return { ok: false, error: 'El nombre del cliente debe tener al menos 2 caracteres.' };
+
+    const nombre = nombreCliente.trim();
+
+    const existente = await Cliente
+        .findOne({ nombre })
+        .select('_id nombre activo')
+        .lean();
+
+    if (existente && existente.activo)
+        return { ok: true, clienteRef: existente._id, nombreCliente: existente.nombre, creado: false };
+
+    // Caso 3: no existe → crear cliente nuevo automáticamente
+    const nuevo = await Cliente.create({ nombre, zona: zona || '', telefono: '' });
+    console.info(`[ventas.controller] Cliente creado automáticamente: "${nombre}" (${nuevo._id})`);
+
+    return { ok: true, clienteRef: nuevo._id, nombreCliente: nuevo.nombre, creado: true };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,7 +93,7 @@ const validarItems = (items) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WEB — sin cambios funcionales, solo .lean() añadido donde faltaba
+// WEB
 // ─────────────────────────────────────────────────────────────────────────────
 
 exports.listar = async (req, res) => {
@@ -149,20 +132,30 @@ exports.mostrarCrear = (req, res) => {
 };
 
 exports.guardar = async (req, res) => {
-    const { zona, entidad, piso, cliente, producto, precioUnitario, cantidad } = req.body;
+    const { zona, entidad, piso, cliente, clienteId, producto, precioUnitario, cantidad } = req.body;
     const errores = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
 
     if (errores.length > 0)
         return res.render('ventas/crear', { usuario: req.session.usuario, error: errores.join(' ') });
 
     try {
+       
+        const resolucion = await resolverClienteRef(clienteId, cliente, zona);
+
+        if (!resolucion.ok)
+            return res.render('ventas/crear', {
+                usuario: req.session.usuario,
+                error: resolucion.error
+            });
+
         const precio      = Number(precioUnitario);
         const cantidadNum = parseInt(cantidad, 10);
 
         await new Venta({
             zona,
             ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-            cliente:        cliente.trim(),
+            clienteRef:     resolucion.clienteRef,       // ✅ incluido
+            cliente:        resolucion.nombreCliente,    // ✅ nombre canónico del modelo
             producto:       producto.trim(),
             precioUnitario: precio,
             cantidad:       cantidadNum,
@@ -175,7 +168,10 @@ exports.guardar = async (req, res) => {
         res.redirect('/ventas');
     } catch (error) {
         console.error('Error guardar venta:', error);
-        res.status(500).render('ventas/crear', { usuario: req.session.usuario, error: 'Error interno al guardar la venta.' });
+        res.status(500).render('ventas/crear', {
+            usuario: req.session.usuario,
+            error: 'Error interno al guardar la venta.'
+        });
     }
 };
 
@@ -211,7 +207,7 @@ exports.mostrarEditar = async (req, res) => {
 };
 
 exports.actualizar = async (req, res) => {
-    const { zona, entidad, piso, cliente, producto, precioUnitario, cantidad } = req.body;
+    const { zona, entidad, piso, cliente, clienteId, producto, precioUnitario, cantidad } = req.body;
     const errores = validarVenta({ zona, cliente, producto, precioUnitario, cantidad });
 
     if (errores.length > 0) {
@@ -223,6 +219,15 @@ exports.actualizar = async (req, res) => {
     }
 
     try {
+        const resolucion = await resolverClienteRef(clienteId, cliente, zona);
+
+        if (!resolucion.ok)
+            return res.render('ventas/editar', {
+                usuario: req.session.usuario,
+                venta:   { _id: req.params.id, ...req.body },
+                error:   resolucion.error
+            });
+
         const precio      = Number(precioUnitario);
         const cantidadNum = parseInt(cantidad, 10);
 
@@ -231,7 +236,8 @@ exports.actualizar = async (req, res) => {
             {
                 zona,
                 ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                cliente:        cliente.trim(),
+                clienteRef:     resolucion.clienteRef,    // ✅ incluido
+                cliente:        resolucion.nombreCliente, // ✅ nombre canónico
                 producto:       producto.trim(),
                 precioUnitario: precio,
                 cantidad:       cantidadNum,
@@ -249,7 +255,6 @@ exports.actualizar = async (req, res) => {
 
 exports.eliminar = async (req, res) => {
     try {
-        // ✅ Una sola operación: findByIdAndDelete (sin findById previo)
         const eliminada = await Venta.findByIdAndDelete(req.params.id);
         if (!eliminada) return res.redirect('/ventas');
         res.redirect('/ventas');
@@ -259,18 +264,11 @@ exports.eliminar = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// registrarCobro — WEB  (también usado por registrarCobroAPI)
-// ✅ OPTIMIZADO: findById con .select() mínimo + updateOne atómico con $push/$set
-// ─────────────────────────────────────────────────────────────────────────────
 exports.registrarCobro = async (req, res) => {
     const { monto, metodo, referencia } = req.body;
     const { id } = req.params;
 
     try {
-        // ✅ Solo traemos los 3 campos que necesitamos para validar.
-        // El documento de venta puede tener arrays pesados (historial, items, cobros)
-        // que NO necesitamos para registrar un cobro.
         const venta = await Venta
             .findById(id)
             .select('total totalPagado estadoPago')
@@ -288,15 +286,11 @@ exports.registrarCobro = async (req, res) => {
         if (venta.estadoPago === 'pagado')
             return res.status(400).json({ error: 'La venta ya está pagada.' });
 
-        // Calcular nuevo estado en JS (lógica simple, no amerita round-trip extra)
         const nuevoTotalPagado = Math.min(venta.total, (venta.totalPagado || 0) + montoNum);
         const nuevoEstadoPago  =
             nuevoTotalPagado >= venta.total ? 'pagado'  :
             nuevoTotalPagado  > 0           ? 'parcial' : 'pendiente';
 
-        // ✅ Una sola operación atómica: $push añade el cobro al array,
-        // $set actualiza totalPagado y estadoPago — todo en un solo write.
-        // Sin .save(), sin pre('save') hook, sin hidratar el documento.
         await Venta.updateOne(
             { _id: id },
             {
@@ -332,39 +326,19 @@ exports.registrarCobro = async (req, res) => {
 // API
 // ═════════════════════════════════════════════════════════════════════════════
 
-// GET /api/v1/ventas
-// ✅ OPTIMIZADO: filtra por clienteRef (ObjectId, indexado) en lugar de
-// cliente (String, sin índice útil). Proyección estricta: no carga arrays pesados.
-//
-// [FIX-3] limite: validación de que sea un número positivo antes del cap.
-//   Antes: Math.min(Number("abc"), 100) = Math.min(NaN, 100) = NaN
-//          → skip(NaN) y limit(NaN) en Mongoose → comportamiento indefinido.
-//   Ahora: fallback explícito a 20 si el valor no es un número positivo.
 exports.listarAPI = async (req, res) => {
     const { zona, clienteId, estadoPago, pagina = 1, limite = 20 } = req.query;
-
-    // [FIX-3] Validar que limite sea un número positivo antes de aplicar cap
-    const limiteParseado = parseInt(limite, 10);
-    const limiteNum      = (isNaN(limiteParseado) || limiteParseado < 1)
-        ? 20
-        : Math.min(limiteParseado, 100); // cap de seguridad
-
-    const paginaNum = Math.max(1, parseInt(pagina, 10) || 1);
-    const skip      = (paginaNum - 1) * limiteNum;
+    const limiteNum = Math.min(Number(limite), 100);
+    const skip      = (Number(pagina) - 1) * limiteNum;
 
     try {
         const filtro = {};
         if (zona       && zona       !== '') filtro.zona       = zona;
         if (estadoPago && estadoPago !== '') filtro.estadoPago = estadoPago;
 
-        // ✅ clienteRef (ObjectId indexado) en lugar de cliente (String sin índice)
-        // Usa el índice { clienteRef, estadoPago } o { clienteRef, fecha }
-        // según los campos del filtro → IXSCAN garantizado.
         if (clienteId && mongoose.Types.ObjectId.isValid(clienteId))
             filtro.clienteRef = new mongoose.Types.ObjectId(clienteId);
 
-        // ✅ Proyección estricta: excluye historialEdiciones[] y cobros[] que
-        // pueden ser muy pesados y no se necesitan en la lista.
         const proyeccion = {
             zona: 1, cliente: 1, clienteRef: 1,
             producto: 1, total: 1, totalPagado: 1,
@@ -374,7 +348,6 @@ exports.listarAPI = async (req, res) => {
             'items.nombre': 1, 'items.cantidad': 1, 'items.entregado': 1
         };
 
-        // ✅ Promise.all → las dos queries corren EN PARALELO en MongoDB
         const [ventas, total] = await Promise.all([
             Venta
                 .find(filtro, proyeccion)
@@ -389,7 +362,7 @@ exports.listarAPI = async (req, res) => {
             success: true,
             data:    ventas,
             paginacion: {
-                paginaActual: paginaNum,
+                paginaActual: Number(pagina),
                 totalPaginas: Math.ceil(total / limiteNum),
                 total
             }
@@ -400,11 +373,6 @@ exports.listarAPI = async (req, res) => {
     }
 };
 
-// POST /api/v1/ventas
-//
-// [FIX-2] x-device-id sanitizado antes de persistir.
-//   Antes: req.headers['x-device-id'] se guardaba directamente sin filtrado.
-//   Ahora: truncado a 64 caracteres y sanitizado con trim().
 exports.guardarAPI = async (req, res) => {
     const {
         zona, entidad, piso,
@@ -457,11 +425,6 @@ exports.guardarAPI = async (req, res) => {
 
     const cliente = clienteResuelto;
 
-    // [FIX-2] Sanitizar x-device-id: truncar a 64 chars y limpiar espacios
-    const deviceId = typeof req.headers['x-device-id'] === 'string'
-        ? req.headers['x-device-id'].trim().slice(0, 64)
-        : null;
-
     try {
         if (Array.isArray(items) && items.length > 0) {
             const erroresItems = validarItems(items);
@@ -479,21 +442,21 @@ exports.guardarAPI = async (req, res) => {
 
             const nueva = await Venta.create({
                 zona,
-                ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-                clienteRef:     cliente._id,
-                cliente:        cliente.nombre,
-                producto:       primerItem.nombre,
-                precioUnitario: primerItem.precio,
-                cantidad:       primerItem.cantidad,
-                total:          totalGeneral,
-                items:          itemsNorm,
-                tipoTransaccion:      tipoTransaccion || 'venta',
-                estadoEntrega:        estadoEntrega   || 'Inmediata',
-                estadoPago:           'pendiente',
-                totalPagado:          0,
-                cobros:               [],
-                clientTempId:         clientTempId || null,
-                creadoPorDispositivo: deviceId  // [FIX-2] valor sanitizado
+                ubicacion:        { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+                clienteRef:       cliente._id,
+                cliente:          cliente.nombre,
+                producto:         primerItem.nombre,
+                precioUnitario:   primerItem.precio,
+                cantidad:         primerItem.cantidad,
+                total:            totalGeneral,
+                items:            itemsNorm,
+                tipoTransaccion:  tipoTransaccion || 'venta',
+                estadoEntrega:    estadoEntrega   || 'Inmediata',
+                estadoPago:       'pendiente',
+                totalPagado:      0,
+                cobros:           [],
+                clientTempId:     clientTempId || null,
+                creadoPorDispositivo: req.headers['x-device-id'] || null
             });
 
             return res.status(201).json({ success: true, data: nueva });
@@ -508,20 +471,20 @@ exports.guardarAPI = async (req, res) => {
 
         const nueva = await Venta.create({
             zona,
-            ubicacion:      { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
-            clienteRef:     cliente._id,
-            cliente:        cliente.nombre,
-            producto:       producto.trim(),
-            precioUnitario: precio,
-            cantidad:       cantidadNum,
-            total:          precio * cantidadNum,
-            tipoTransaccion:      tipoTransaccion || 'venta',
-            estadoEntrega:        estadoEntrega   || 'Inmediata',
-            estadoPago:           'pendiente',
-            totalPagado:          0,
-            cobros:               [],
-            clientTempId:         clientTempId || null,
-            creadoPorDispositivo: deviceId  // [FIX-2] valor sanitizado
+            ubicacion:        { entidad: entidad?.trim() || '', piso: piso?.trim() || '' },
+            clienteRef:       cliente._id,
+            cliente:          cliente.nombre,
+            producto:         producto.trim(),
+            precioUnitario:   precio,
+            cantidad:         cantidadNum,
+            total:            precio * cantidadNum,
+            tipoTransaccion:  tipoTransaccion || 'venta',
+            estadoEntrega:    estadoEntrega   || 'Inmediata',
+            estadoPago:       'pendiente',
+            totalPagado:      0,
+            cobros:           [],
+            clientTempId:     clientTempId || null,
+            creadoPorDispositivo: req.headers['x-device-id'] || null
         });
 
         return res.status(201).json({ success: true, data: nueva });
@@ -532,7 +495,6 @@ exports.guardarAPI = async (req, res) => {
     }
 };
 
-// PUT /api/v1/ventas/:id
 exports.actualizarAPI = async (req, res) => {
     const { zona, entidad, piso, clienteId, producto, precioUnitario, cantidad } = req.body;
 
@@ -568,8 +530,6 @@ exports.actualizarAPI = async (req, res) => {
             camposUpdate.cliente    = clienteData.nombre;
         }
 
-        // ✅ updateOne → no devuelve el documento (más eficiente que findByIdAndUpdate
-        // cuando solo necesitamos saber si la operación tuvo efecto).
         const result = await Venta.updateOne(
             { _id: req.params.id },
             { $set: camposUpdate },
@@ -587,7 +547,6 @@ exports.actualizarAPI = async (req, res) => {
     }
 };
 
-// DELETE /api/v1/ventas/:id
 exports.eliminarAPI = async (req, res) => {
     try {
         const eliminada = await Venta.findByIdAndDelete(req.params.id);
@@ -600,23 +559,10 @@ exports.eliminarAPI = async (req, res) => {
     }
 };
 
-// POST /api/v1/ventas/:id/cobros
-// ✅ Reutiliza registrarCobro (ya optimizado con $push/$set atómico)
 exports.registrarCobroAPI = (req, res) => {
     return exports.registrarCobro(req, res);
 };
 
-// PATCH /api/v1/ventas/:id/items/:itemId/entrega
-// ✅ OPTIMIZADO: updateOne atómico con operador posicional $ +
-//    pipeline de aggregation para recalcular estadoEntrega.
-//    Antes: findById → mutación JS → save() (2 round-trips + hidratación completa).
-//    Ahora: 2 updateOne atómicos, sin traer NADA a la RAM del servidor.
-//
-// [FIX-1] Validación de ObjectId antes de construir los objetos.
-//   Antes: new mongoose.Types.ObjectId(id) sin validar → lanzaba excepción
-//   si id o itemId no eran ObjectIds válidos, escapando al catch genérico
-//   y potencialmente exponiendo un stack trace en la respuesta.
-//   Ahora: mongoose.Types.ObjectId.isValid() previo → 400 limpio.
 exports.actualizarEntregaItemAPI = async (req, res) => {
     const { id, itemId } = req.params;
     const { entregado }  = req.body;
@@ -624,14 +570,7 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
     if (typeof entregado !== 'boolean')
         return res.status(400).json({ success: false, message: 'El campo entregado debe ser boolean.' });
 
-    // [FIX-1] Validar ambos IDs antes de construir ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(itemId))
-        return res.status(400).json({ success: false, message: 'ID de venta o ítem inválido.' });
-
     try {
-        // ── Paso 1: Actualizar solo el booleano del ítem específico ──────────
-        // El operador posicional $ localiza el subdocumento por su _id
-        // y actualiza SOLO ese campo. MongoDB no mueve el documento completo.
         const result = await Venta.updateOne(
             {
                 _id:         new mongoose.Types.ObjectId(id),
@@ -645,10 +584,6 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
         if (result.matchedCount === 0)
             return res.status(404).json({ success: false, message: 'Venta o ítem no encontrado.' });
 
-        // ── Paso 2: Recalcular estadoEntrega atómicamente ────────────────────
-        // Aggregation pipeline en updateOne (requiere MongoDB 4.2+).
-        // Lee y escribe en la misma operación sin traer el documento a RAM.
-        // $allElementsTrue evalúa si todos los items tienen entregado: true.
         await Venta.updateOne(
             { _id: new mongoose.Types.ObjectId(id) },
             [
@@ -691,11 +626,6 @@ exports.actualizarEntregaItemAPI = async (req, res) => {
     }
 };
 
-// PUT /api/v1/cartera/:ventaId/editar
-// Edita ítems/totales y guarda historial de cambios.
-// Mantiene .save() porque el hook pre('save') recalcula estadoPago
-// y el historialEdiciones requiere leer el estado anterior completo.
-// Si el historial crece mucho, considera migrar a $push atómico también.
 exports.editarVentaAPI = async (req, res) => {
     const { producto, cantidad, items, total, motivo } = req.body;
     const usuario = req.session?.usuario || req.usuario || 'app';

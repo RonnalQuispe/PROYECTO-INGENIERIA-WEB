@@ -1,13 +1,4 @@
-/*
- * dashboard_analitico.css
- * UBICACIÓN: public/css/dashboard_analitico.css
- * Estilos del módulo Dashboard Analítico / Motor de Inteligencia de Cartera.
- * Se carga ADEMÁS de styleApp.css, sin sobreescribirlo.
- */
 
-/* ════════════════════════════════════════════════════════════
-   TOKENS
-   ════════════════════════════════════════════════════════════ */
 :root {
     /* Colores semánticos */
     --c-bg:       #f4f6f9;
