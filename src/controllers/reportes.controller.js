@@ -22,3 +22,46 @@ exports.mostrarDashboard = async (req, res) => {
         res.status(500).send('Error: ' + e.message);
     }
 };
+
+// GET /api/v1/reportes/dashboard
+exports.dashboardAPI = async (req, res) => {
+    try {
+        const reportesService = require('../services/reportes.service');
+
+        const ventas = await Venta.find({}).select(CAMPOS + ' zona estadoPago').lean();
+        const analisis = analizarCartera(ventas);
+
+        const rankingRiesgo = analisis.rankingRiesgo.map(copia => ({
+            ...copia,
+            nivelRiesgo: nivel(copia.indiceMorosidad)
+        }));
+
+        const [kpis, topProductos, productosMenos, ventasPorZona,
+               clientesFrecuentes, abastecimiento] = await Promise.all([
+            reportesService.getKPIs(),
+            reportesService.getTopProductos(),
+            reportesService.getProductosMenosVendidos(),
+            reportesService.getVentasPorZona(),
+            reportesService.getClientesFrecuentes(),
+            reportesService.getProyeccionAbastecimiento(),
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                kpis,
+                topProductos,
+                productosMenos,
+                ventasPorZona,
+                clientesFrecuentes,
+                abastecimiento,
+                rankingRiesgo,
+                totalClientes:    analisis.clientes?.length || 0,
+                clientesEnRiesgo: rankingRiesgo.filter(c => c.nivelRiesgo === 'alto').length,
+            }
+        });
+    } catch (e) {
+        console.error('[dashboardAPI]', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+};

@@ -1,5 +1,3 @@
-
-
 const express    = require('express');
 const router     = express.Router();
 const { verifyJWT } = require('../middleware/auth.middleware');
@@ -117,8 +115,7 @@ router.get('/cartera',                               carteraCtrl.listarAPI);
 router.get('/cartera/:cliente',                      carteraCtrl.detalleAPI);
 router.put('/cartera/:ventaId/editar',               carteraCtrl.editarVentaAPI);
 
-/* ── REPORTES ──────────────────────────────────────────────────────────────────
-router.get('/reportes/kpis',                         reportesCtrl.kpisAPI);
-router.get('/reportes/dashboard',                    reportesCtrl.dashboardAPI);*/
+// ── REPORTES ──────────────────────────────────────────────────────────────────
+router.get('/reportes/dashboard',                    reportesCtrl.dashboardAPI);
 
 module.exports = router;
